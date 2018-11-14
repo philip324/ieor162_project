@@ -25,7 +25,7 @@ def main():
 	ExistingVDC 	= input_data.parse('ExistingVDC')
 	VDCcost 		= input_data.parse('VDCcost')
 	LogisticsCost 	= input_data.parse('LogisticsCost')
-	print(LocationLatLong.columns)
+
 	# IPython.embed()
 
 
