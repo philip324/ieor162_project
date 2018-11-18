@@ -1,5 +1,12 @@
 %% IEOR 162, Project
 
+%%
+homedir = pwd;
+new_dir = sprintf('%s/final_problem', homedir);
+if ~exist(new_dir, 'dir')
+    mkdir(new_dir);
+end
+
 %% load data
 % Evaluate cell element using C{i,j}, view cell element using C(i,j).
 clear;
