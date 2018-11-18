@@ -64,7 +64,14 @@ num_vehicle = numel(shipment_req(2:end,1));
 active_dealer = union(cell2mat(shipment_req(2:end,3)),shipment_req{2,3});
 num_dealer = numel(active_dealer);
 
+
+
+
+
+
+
 %% closest_VDC = Map(dealer)
+% Caution: this function takes a long time to run...
 key_dealer = cell(3,1);
 val_VDC = cell(3,1);
 tic
@@ -107,7 +114,6 @@ end
 lat_VDC = cell2mat(VDC_loc(:,2));
 long_VDC = cell2mat(VDC_loc(:,3));
 
-%%
 figure();
 hold on;
 plot(mod(long_dealer+360,360)-180, lat_dealer, 'b*');
@@ -117,18 +123,6 @@ axis([-180 180 0 60]);
 xlabel('longitude (offset = 180 degree)');
 ylabel('latitude');
 grid on;
-
-%%
-for i = 1:5
-    d = active_dealer(i);
-    v = dealer2VDC(d);
-    d_lat = location{dealer_loc_idx(d), 3};
-    d_long = location{dealer_loc_idx(d), 4};
-    v_lat = location{VDC_loc_idx(v), 3};
-    v_long = location{VDC_loc_idx(v), 4};
-    plot(mod(d_long+360,360)-180, d_lat, 'g+');
-    plot(mod(v_long+360,360)-180, v_lat, 'y+');
-end
 
 %% Attribution
 % Name: Aya Hamoodi
