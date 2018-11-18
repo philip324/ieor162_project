@@ -55,34 +55,42 @@ shipment_req(2:end,4) = C{4};
 fprintf('Processing time: %i\n',toc);
 
 %% main script
-% datenum(shipment_req{2,end})
 VDC_loc_idx = @(s)find(cellfun(@(x)isequal(x,s), location(1:end,1)));
 VDC_cap_idx = @(s)find(cellfun(@(x)isequal(x,s), VDC_capacity(1:end,1)));
 dealer_loc_idx = @(i) i;
 
 num_VDC = numel(VDC_capacity(2:end,1));
 num_vehicle = numel(shipment_req(2:end,1));
-% num_plant = numel(union(shipment_req(2:end,2),shipment_req(2,2)));
 active_dealer = union(cell2mat(shipment_req(2:end,3)),shipment_req{2,3});
-num_dealer=numel(active_dealer);
+num_dealer = numel(active_dealer);
 
-%% closest VDC to every dealer
-dealer2VDC = cell(num_dealer,2);
-for i = 1:num_dealer
+%% closest_VDC = Map(dealer)
+key_dealer = cell(3,1);
+val_VDC = cell(3,1);
+tic
+for i = 1:5%num_dealer
+    d = active_dealer(i);
+    d_lat = location{dealer_loc_idx(d), 3};
+    d_long = location{dealer_loc_idx(d), 4};
+    min_dist = inf;
+    closest_VDC = '';
     for j = 1:num_VDC
-        % later
+        v = VDC_capacity{j+1,1};
+        v_lat = location{VDC_loc_idx(v), 3};
+        v_long = location{VDC_loc_idx(v), 4};
+        dist = road_dist(d_lat,d_long,v_lat,v_long);
+        if dist < min_dist
+            min_dist = dist;
+            closest_VDC = v;
+        end
     end
+    key_dealer(i) = {d};
+    val_VDC(i) = {closest_VDC};
 end
+dealer2VDC = containers.Map(key_dealer,val_VDC);
+toc
 
 %% plot all VDCs and dealers' location
-VDC_loc = cell(num_VDC,3);
-for i = 1:num_VDC
-    idx = VDC_loc_idx(VDC_capacity{i+1,1});
-    VDC_loc(i,:) = {location{idx,1},location{idx,3},location{idx,4}};
-end
-lat_VDC = cell2mat(VDC_loc(:,2));
-long_VDC = cell2mat(VDC_loc(:,3));
-
 dealer_loc = cell(length(active_dealer),3);
 for i = 1:length(active_dealer)
     idx = dealer_loc_idx(active_dealer(i));
@@ -91,15 +99,36 @@ end
 lat_dealer = cell2mat(dealer_loc(:,2));
 long_dealer = cell2mat(dealer_loc(:,3));
 
+VDC_loc = cell(num_VDC,3);
+for i = 1:num_VDC
+    idx = VDC_loc_idx(VDC_capacity{i+1,1});
+    VDC_loc(i,:) = {location{idx,1},location{idx,3},location{idx,4}};
+end
+lat_VDC = cell2mat(VDC_loc(:,2));
+long_VDC = cell2mat(VDC_loc(:,3));
+
+%%
 figure();
 hold on;
-plot(mod(long_dealer+360, 360)-180, lat_dealer, 'b*');
-plot(mod(long_VDC+360, 360)-180, lat_VDC, 'r*');
-axis([-180 180 0 60]);
+plot(mod(long_dealer+360,360)-180, lat_dealer, 'b*');
+plot(mod(long_VDC+360,360)-180, lat_VDC, 'r*');
 legend('dealer','VDC');
+axis([-180 180 0 60]);
 xlabel('longitude (offset = 180 degree)');
 ylabel('latitude');
 grid on;
+
+%%
+for i = 1:5
+    d = active_dealer(i);
+    v = dealer2VDC(d);
+    d_lat = location{dealer_loc_idx(d), 3};
+    d_long = location{dealer_loc_idx(d), 4};
+    v_lat = location{VDC_loc_idx(v), 3};
+    v_long = location{VDC_loc_idx(v), 4};
+    plot(mod(d_long+360,360)-180, d_lat, 'g+');
+    plot(mod(v_long+360,360)-180, v_lat, 'y+');
+end
 
 %% Attribution
 % Name: Aya Hamoodi
