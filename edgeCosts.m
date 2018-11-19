@@ -3,8 +3,8 @@ function costs = edgeCosts(VDCs,location)
 VDC_loc_idx = @(s)find(cellfun(@(x)isequal(x,s), location(1:end,1)));
 
 key_name = VDCs;
-val_loc = cell(length(VDC),1);
-for i = 1:length(VDC)
+val_loc = cell(length(VDCs),1);
+for i = 1:length(VDCs)
     v = VDCs{i};
     lat = location{VDC_loc_idx(v),3};
     long = location{VDC_loc_idx(v),4};
