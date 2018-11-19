@@ -28,18 +28,18 @@ available = transAvailable(node1, node2, mode);
 
 %then calculate the distance between each vertex
 distSet = [];
-num_edge = 44*44;
+num_edge = length(key_name) * length(key_name);
 key_name_dist = cell(1,num_edge);
-    for k = 1:length(num_edge)
-        key_name_dist{k} = k;
-    end
+k = 1;
 
     for i = 1:length(key_name)
         for j = 1:length(key_name)
+            key_name_dist{k} = "e" + i + j;
             temp = VDC2loc(VDCs{i}); 
             temp2 = VDC2loc(VDCs{j});
             distance = road_dist(temp{1}(1), temp{1}(2), temp2{1}(1), temp2{1}(2));
             distSet = [distSet, distance];
+            k = k + 1;
         end
     end
 M = containers.Map(key_name_dist,distSet);    
