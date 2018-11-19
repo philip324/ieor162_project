@@ -24,7 +24,7 @@ VDC2loc = containers.Map(key_name,val_loc);
 
 %then figure out what transportation methods exist between the start_node
 %and end node
-
+available = transAvailable(node1, node2, mode);
 
 
 %then calculate the distance between each vertex
