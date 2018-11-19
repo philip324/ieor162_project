@@ -26,13 +26,12 @@ VDC2loc = containers.Map(key_name,val_loc);
 %and end node
 available = transAvailable(node1, node2, mode);
 
-
 %then calculate the distance between each vertex
-distSet = []
+distSet = [];
 num_edge = 44*44;
 key_name_dist = cell(1,num_edge);
     for k = 1:length(num_edge)
-        key_name_dist{k} = k
+        key_name_dist{k} = k;
     end
 
     for i = 1:length(key_name)
@@ -43,19 +42,21 @@ key_name_dist = cell(1,num_edge);
             distSet = [distSet, distance];
         end
     end
-M = containers.Map(key_name_dist,distSet)    
+M = containers.Map(key_name_dist,distSet);    
 
 %then calculate the cost of travelling that distance
 %repeat this for every edge in the network
 
-modes = nan(1,2);
-modes(1) = distances(i)*t_variable_cost + t_fixed_cost; %truck cost ($)
-modes(2) = distance(i)*r_variable_cost + r_fixed_cost; %rails cost ($)
-minmodescost = min(modes);
-
-%repeat this for every edge in the network
-
+tmode = [];
+rmode = [];
+minmodescost = [];
+    for i = 1:length(num_edge)
+        tmode = [tmode, distSet(i)*t_variable_cost + t_fixed_cost];
+        rmode = [rmode, distSet(i)*r_variable_cost + r_fixed_cost];
+        minmodescost = [minmodescost, min(tmode(i), rmode(i))];
+    end
 
 %return a cell containing start, end, cost for each pair
+costs = minmodescost;
 
 end
