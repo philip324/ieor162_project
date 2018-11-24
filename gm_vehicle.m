@@ -61,68 +61,85 @@ dealers = union(cell2mat(shipment_req(2:end,3)),shipment_req{2,3});
 dealers = mat2cell(dealers,ones(length(dealers),1));
 VDCs = VDC_capacity(2:end,1);
 plants = union(shipment_req(2:end,2),shipment_req{2,2});
-num_VDC = numel(VDCs);
-num_dealer = numel(dealers);
-num_plant = numel(plants);
+final_VDCs = keys(VDC2dealer)';
 
-%% Create 2 maps
-% dealer2VDC = containers.Map('KeyType','double','ValueType','any');
-% VDC2dealer = containers.Map('KeyType','char','ValueType','any');
-% tic
-% for i = 1:num_dealer
-%     d = dealers{i};
-%     d_loc = dealer_loc(d,location);
-%     min_dist = inf;
-%     closest_VDC = '';
-%     for j = 1:num_VDC
-%         v = VDCs{j};
-%         v_loc = VDC_loc(v,location);
-%         dist = road_dist(d_loc(1),d_loc(2),v_loc(1),v_loc(2));
-%         if dist < min_dist
-%             min_dist = dist;
-%             closest_VDC = v;
-%         end
-%     end
-%     
-%     dealer2VDC(d) = closest_VDC;
-%     if ~isKey(VDC2dealer,closest_VDC)
-%         VDC2dealer(closest_VDC) = {d};
-%     else
-%         val = VDC2dealer(closest_VDC);
-%         val{:} = [val{:}, d];
-%         VDC2dealer(closest_VDC) = val;
-%     end
-%     
-%     if mod(i,50) == 0
-%         disp(['iteration ',num2str(i)]);
-%         disp(['Processing time: ',num2str(round(toc,2)),' sec']);
-%         disp(' ');
-%         tic
-%     end
-% end
-% save('VDC_dealer_pairs.mat','dealer2VDC','VDC2dealer');
+% find all shortest routes from plants to final VDCs
+% [connection,edge_costs] = build_graph(VDCs,location,VDC_capacity);
+load graph
 
-%% plot all VDCs and dealers' location
-dealer_locations = zeros(2,num_dealer);
-for i = 1:num_dealer
-    d_loc = dealer_loc(dealers{i},location);
-    dealer_locations(:,i) = d_loc';
-end
-VDC_locations = zeros(2,num_VDC);
-for i = 1:num_VDC
-    v_loc = VDC_loc(VDCs{i},location);
-    VDC_locations(:,i) = v_loc';
+%%
+SID = zeros(1,numel(plants));
+for i = 1:numel(plants)
+    lst = all(ismember(VDCs,plants(i)),2);
+    SID(i) = find(lst);
 end
 
-figure();
-hold on;
-grid on;
-plot(mod(dealer_locations(2,:)+360,360)-180,dealer_locations(1,:),'b.');
-plot(mod(VDC_locations(2,:)+360,360)-180,VDC_locations(1,:),'r*');
-legend('dealer','VDC');
-axis([-100 100 0 60]);
-xlabel('longitude (offset = 180 degree)');
-ylabel('latitude');
+FID = zeros(1,numel(final_VDCs));
+for i = 1:numel(final_VDCs)
+    lst = all(ismember(VDCs,final_VDCs(i)),2);
+    FID(i) = find(lst);
+end
+
+shortest_routes = containers.Map('KeyType','char','ValueType','any');
+for i = 1:numel(plants)
+    for j = 1:numel(final_VDCs)
+        if SID(i) ~= FID(j)
+            [~,path] = dijkstra(connection,edge_costs,SID(i),FID(j));
+            val = cell(1);
+            for k = 1:numel(path)
+                v = VDCs{path(k)};
+                val(k) = {v};
+            end
+            shortest_routes([plants{i},' ',final_VDCs{j}]) = val;
+        end
+    end
+end
+
+
+
+
+
+
+%% get all VDCs and dealers' locations
+dealer_locations = zeros(numel(dealers),2);
+for i = 1:numel(dealers)
+    d_loc = get_location(dealers{i},location);
+    dealer_locations(i,:) = d_loc';
+end
+VDC_locations = zeros(numel(VDCs),2);
+for i = 1:numel(VDCs)
+    v_loc = get_location(VDCs{i},location);
+    VDC_locations(i,:) = v_loc';
+end
+
+%% Plot shortest path from plant to other VDCs
+tic
+for i = 1:numel(plants)
+    figure();
+    hold on;
+    grid on;
+    plot(mod(dealer_locations(:,2)+360,360)-180,dealer_locations(:,1),'b.');
+    plot(mod(VDC_locations(:,2)+360,360)-180,VDC_locations(:,1),'r*');
+%     legend('dealer','VDC');
+    axis([-100 100 0 60]);
+    xlabel('longitude (offset = 180 degree)');
+    ylabel('latitude');
+    title(['Plant ',plants{i}]);
+    
+    p = plants{i};
+    for j = 1:numel(final_VDCs)
+        if ~isKey(shortest_routes,[p,' ',final_VDCs{j}])
+            continue;
+        end
+        path = shortest_routes([p,' ',final_VDCs{j}]);
+        locs = zeros(numel(path),2);
+        for k = 1:numel(path)
+            locs(k,:) = get_location(path{k},location);
+        end
+        plot(mod(locs(:,2)+360,360)-180,locs(:,1),'-kd','LineWidth',1.5);
+    end
+end
+toc
 
 %% visualize VDC dealer pairs
 figure();
@@ -132,12 +149,12 @@ k = keys(VDC2dealer);
 colors = hsv(length(k));
 for i = 1:length(k)
     v = k{i};
-    v_loc = VDC_loc(v,location);
+    v_loc = get_location(v,location);
     ds = VDC2dealer(v);
     ds = ds{:};
     for j = 1:length(ds)
         d = ds(j);
-        d_loc = dealer_loc(d,location);
+        d_loc = get_location(d,location);
         plot(mod(d_loc(2)+360,360)-180,d_loc(1),'.','color',colors(i,:));
     end
     plot(mod(v_loc(2)+360,360)-180,v_loc(1),'*k');
@@ -145,26 +162,6 @@ end
 axis([-100 100 0 60]);
 xlabel('longitude (offset = 180 degree)');
 ylabel('latitude');
-
-%% helper functions
-function v_loc = VDC_loc(v,location)
-VDC_loc_idx = @(s)find(cellfun(@(x)isequal(x,s), location(1:end,1)));
-v_lat = location{VDC_loc_idx(v), 3};
-v_long = location{VDC_loc_idx(v), 4};
-v_loc = [v_lat, v_long];
-end
-
-function d_loc = dealer_loc(d,location)
-dealer_loc_idx = @(i) i;
-d_lat = location{dealer_loc_idx(d), 3};
-d_long = location{dealer_loc_idx(d), 4};
-d_loc = [d_lat, d_long];
-end
-
-function v_cap = VDC_cap(v,VDC_capacity)
-VDC_cap_idx = @(s)find(cellfun(@(x)isequal(x,s), VDC_capacity(1:end,1)));
-v_cap = VDC_capacity{VDC_cap_idx(v),1};
-end
 
 %% Attribution
 % Name: Aya Hamoodi
