@@ -1,4 +1,5 @@
 function [dealer2VDC,VDC2dealer] = VDC_dealer_map(location,dealers,VDCs)
+% dealer2VDC and VDC2dealer were saved to processed_data.mat
 dealer2VDC = containers.Map('KeyType','double','ValueType','any');
 VDC2dealer = containers.Map('KeyType','char','ValueType','any');
 tic

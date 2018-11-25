@@ -58,7 +58,7 @@ shipment_req(:,3) = num2cell(C{3});
 shipment_req(:,4) = C{4};
 disp(['Processing time: ',num2str(round(toc,2)),' sec']);
 
-%% main script
+%% Get lists of dealers and VDCs
 dealers = union(cell2mat(shipment_req(:,3)),shipment_req{1,3});
 dealers = mat2cell(dealers,ones(length(dealers),1));
 VDCs = VDC_capacity(:,1);
@@ -93,13 +93,29 @@ for i = 1:numel(plants)
     end
 end
 
-%% Distribution of car production
+%% Find final VDC arrival time for each vehicle
+arrival = cell2mat(keys(arrival_time_map)');
+sorted_arrival = sort(arrival);
+% pending
+
+
+
+
+
+
+
+
+
+
+
+
+%% Distribution of car productionplant_arrival_time
 first_date = floor(min(plant_arrival_time));
 last_date = first_date + 365*2;
 duration = last_date-first_date+1;
 vehicle_distribution = zeros(1,duration);
 
-for i = 1:numel(plant_arrival_time)
+for i = 1:length(shipment_req)
     idx = floor(plant_arrival_time(i))-first_date+1;
     if idx <= duration
         vehicle_distribution(idx) = vehicle_distribution(idx) + 1;
@@ -114,12 +130,6 @@ plot([first_date+365,first_date+365],[0 7000],'LineWidth',1.5);
 grid on;
 datetick('x');
 title('Vehicle production distribution (2015-2017)');
-
-
-
-
-
-
 
 %% get all VDCs and dealers' locations
 tic
