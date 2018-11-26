@@ -13,6 +13,7 @@ clear;
 close all;
 clc
 
+tic
 load processed_data.mat
 input_data = 'Input_Cost%2C+Location.xlsx';
 dataset_1 = 'dataset_1/VehicleShipmentRequirement_DataSet1';
@@ -21,7 +22,6 @@ final_prob = 'final_problem/Problem_VehicleShipmentRequirement.csv';
 
 shipment_data = final_prob;
 
-tic
 [~,~,location] = xlsread(input_data,1);
 [~,~,VDC_capacity] = xlsread(input_data,2);
 [~,~,VDC_cost_model] = xlsread(input_data,3);
@@ -59,8 +59,7 @@ shipment_req(:,4) = C{4};
 disp(['Processing time: ',num2str(round(toc,2)),' sec']);
 
 %% Get lists of dealers and VDCs
-dealers = union(cell2mat(shipment_req(:,3)),shipment_req{1,3});
-dealers = mat2cell(dealers,ones(length(dealers),1));
+dealers = num2cell(union(cell2mat(shipment_req(:,3)),shipment_req{1,3}));
 VDCs = VDC_capacity(:,1);
 plants = union(shipment_req(:,2),shipment_req{1,2});
 final_VDCs = keys(VDC2dealer)';
@@ -93,10 +92,149 @@ for i = 1:numel(plants)
     end
 end
 
+%% Initializing variables
+% from VDC to number
+handled_vehicles = containers.Map('KeyType','char','ValueType','double');
+overflow_vehicles = containers.Map('KeyType','char','ValueType','double');
+overflow_days = containers.Map('KeyType','char','ValueType','double');
+for i = 1:numel(VDCs)
+    handled_vehicles(VDCs{i}) = 0;
+    overflow_vehicles(VDCs{i}) = 0;
+    overflow_days(VDCs{i}) = 0;
+end
+
+% from final VDC to vehicle info
+final_arrival = containers.Map('KeyType','char','ValueType','any');
+for i = 1:numel(final_VDCs)
+    final_arrival(final_VDCs{i}) = cell(0,4);
+end
+
+% from edges to vehicle info
+pending_vehicles = containers.Map('KeyType','char','ValueType','any');
+for i = 1:numel(VDCs)
+    for j = 1:numel(VDCs)
+        if i ~= j
+            pending_vehicles([VDCs{i},' ',VDCs{j}]) = cell(0,4);
+        end
+    end
+end
+
+% % from each vehicle to routing detail
+% routing_map = containers.Map('KeyType','char','ValueType','any');
+% for i = 1:length(shipment_req)
+%     % value = n by 4 cell. (loc, arrive_time, depart_time, depart_mode)
+%     routing_map(shipment_req{i,1}) = cell(0,4);
+% end
+
+%%
+tic
+load arrival_time_map.mat
+toc
+
 %% Find final VDC arrival time for each vehicle
-arrival = cell2mat(keys(arrival_time_map)');
-sorted_arrival = sort(arrival);
-% pending
+timeline = sort(cell2mat(keys(arrival_time_map)));
+cutoff = 1e4;
+timeline = timeline(1:cutoff);
+
+tic
+count = 0;
+while size(timeline,2) > 0
+    curr_time = timeline(1);
+    arriving_vehicles = arrival_time_map(curr_time);
+    timeline(1) = [];
+%     remove(arrival_time_map,curr_time);
+    for i = 1:size(arriving_vehicles,1)
+        arrive_veh  = arriving_vehicles(i,:);
+        vid         = arrive_veh{1};
+        path        = arrive_veh{3};
+        modes       = arrive_veh{4};
+        
+        handled_vehicles(path{1}) = handled_vehicles(path{1}) + 1;
+        % Later: add 1 to current capacity
+        if length(path) == 2
+            % arrived at final VDC
+            val = final_arrival(path{1});
+            val(end+1,:) = arrive_veh;
+            final_arrival(path{1}) = val;
+            continue;
+        end
+        
+        curr_VDC = path{1};
+        next_VDC = path{2};
+        mode = modes{1};
+        wait_list = pending_vehicles([curr_VDC,' ',next_VDC]);
+        wait_list(end+1,:) = arrive_veh;
+        curr_load = size(wait_list,1);
+        not_full = ((strcmp(mode,'T') && curr_load < 10) || ...
+                   (strcmp(mode,'R') && curr_load < 20));
+        if not_full
+            pending_vehicles([curr_VDC,' ',next_VDC]) = wait_list;
+            continue;
+        end
+        
+        % Later: subtract 10 or 20 from current capacity
+        pending_vehicles([curr_VDC,' ',next_VDC]) = cell(0,4);
+        curr_loc = get_location(curr_VDC,location);
+        next_loc = get_location(next_VDC,location);
+        dist = road_dist(curr_loc,next_loc);
+        if strcmp(mode,'T')
+            duration = (dist/30)/24;
+        elseif strcmp(mode,'R')
+            duration = (dist/10)/24;
+        end
+        t = datetime(curr_time+duration,'ConvertFrom','datenum');
+        t = dateshift(t,'start','minute','nearest');
+        next_time = datenum(t);
+%         next_arrive_time = curr_time+duration;
+        new_val = cell(0,4);
+        for j = 1:curr_load
+            depart_veh  = wait_list(j,:);
+            vid         = depart_veh{1};
+            arrive_time = depart_veh{2};
+            path        = depart_veh{3};
+            modes       = depart_veh{4};
+%             routing_val = routing_map(vid);
+%             routing_val(end+1,:) = {curr_VDC, arrive_time, ...
+%                                     depart_time, mode};
+            depart_veh(2) = {next_time};
+            path(1) = [];
+            depart_veh(3) = {path};
+            modes(1) = [];
+            depart_veh(4) = {modes};
+            new_val(j,:) = depart_veh;
+        end
+        arrival_time_map(next_time) = new_val;
+        
+        if size(timeline,2) == 0
+            timeline = next_time;
+            continue;
+        end
+        if next_time < timeline(1)
+            timeline = [next_time, timeline];
+        elseif next_time > timeline(end)
+            timeline = [timeline, next_time];
+        else
+            for k = 1:numel(timeline)-1
+                if timeline(k) < next_time && next_time < timeline(k+1)
+                    break;
+                end
+            end
+            timeline = [timeline(1:k),next_time,timeline(k+1:end)];
+        end
+    end
+    
+    count = count + 1;
+    if mod(count,cutoff/10) == 0
+        disp(['iteration ',num2str(count)]);
+        disp(['Processing time: ',num2str(round(toc,2)),' sec']);
+        disp(' ');
+        tic
+    end
+end
+toc
+
+
+
 
 
 
