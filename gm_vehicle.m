@@ -97,10 +97,12 @@ end
 handled_vehicles = containers.Map('KeyType','char','ValueType','double');
 overflow_vehicles = containers.Map('KeyType','char','ValueType','double');
 overflow_days = containers.Map('KeyType','char','ValueType','double');
+curr_capacity = containers.Map('KeyType','char','ValueType','double');
 for i = 1:numel(VDCs)
     handled_vehicles(VDCs{i}) = 0;
     overflow_vehicles(VDCs{i}) = 0;
     overflow_days(VDCs{i}) = 0;
+    curr_capacity(VDCs{i}) = 0;
 end
 
 % from final VDC to vehicle info
@@ -144,13 +146,14 @@ while size(timeline,2) > 0
     timeline(1) = [];
 %     remove(arrival_time_map,curr_time);
     for i = 1:size(arriving_vehicles,1)
+        % Arriving to VDC
         arrive_veh  = arriving_vehicles(i,:);
         vid         = arrive_veh{1};
         path        = arrive_veh{3};
         modes       = arrive_veh{4};
         
+        curr_capacity(path{1}) = curr_capacity(path{1}) + 1;
         handled_vehicles(path{1}) = handled_vehicles(path{1}) + 1;
-        % Later: add 1 to current capacity
         if length(path) == 2
             % arrived at final VDC
             val = final_arrival(path{1});
@@ -169,6 +172,10 @@ while size(timeline,2) > 0
                    (strcmp(mode,'R') && curr_load < 20));
         if not_full
             pending_vehicles([curr_VDC,' ',next_VDC]) = wait_list;
+            % check if overflowed
+            if curr_capacity(curr_VDC) > get_capacity(curr_VDC,VDC_capacity)
+                overflow_vehicles(curr_VDC) = overflow_vehicles(curr_VDC) + 1;
+            end
             continue;
         end
         
@@ -234,7 +241,7 @@ end
 toc
 
 %% Last leg: distribute from final VDC to dealers
-
+% implement sweep algorithm here
 
 
 
