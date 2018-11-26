@@ -18,9 +18,8 @@ for i = 1:length(shipment_req)
     else
         path = shortest_routes([plant,' ',finalVDC]);
         for j = 1:length(path)-1
-            lst1 = all(ismember(VDCs,path(j)),2);
-            lst2 = all(ismember(VDCs,path(j+1)),2);
-            mode = trans_modes(find(lst1),find(lst2));
+            mode = trans_modes(find(ismember(VDCs,path(j)),1), ...
+                               find(ismember(VDCs,path(j+1)),1));
             modes(j) = {mode};
         end
     end
