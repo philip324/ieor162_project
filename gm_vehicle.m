@@ -233,7 +233,7 @@ while size(timeline,2) > 0
 end
 toc
 
-
+%% Last leg: distribute from final VDC to dealers
 
 
 
