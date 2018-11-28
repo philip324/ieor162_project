@@ -57,7 +57,7 @@ shipment_req(:,3) = num2cell(C{3});
 shipment_req(:,4) = C{4};
 disp(['Processing time: ',num2str(round(toc,2)),' sec']);
 
-
+%%
 % Get lists of dealers and VDCs
 dealers = num2cell(union(cell2mat(shipment_req(:,3)),shipment_req{1,3}));
 VDCs = VDC_capacity(:,1);
