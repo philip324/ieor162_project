@@ -1,6 +1,4 @@
 function loc = get_location(p,location)
-% lst1 = all(ismember(VDCs,path(j)),2);
-% find(lst1)
 VDC_loc_idx = @(s)find(cellfun(@(x)isequal(x,s), location(:,1)));
 dealer_loc_idx = @(i) i-1;
 if isa(p,'char')
