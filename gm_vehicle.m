@@ -251,10 +251,17 @@ toc
 %% Last leg: distribute from final VDC to dealers
 % implement sweep algorithm here
 
+%find out what vehicles are at what
+%Final VDC's (during time t)
 
 
+%determine what dealers want what vehicles (at time t)
 
 
+%run the travelling salesman algorithm to find out path (at time t)
+
+
+%send the truck - update the location of each vehicle
 
 
 
