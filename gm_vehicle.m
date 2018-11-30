@@ -307,19 +307,28 @@ toc
 %       2. remnant vehicles stuck in the network
 
 %% Last leg: distribute from final VDC to dealers
-% implement sweep algorithm here
+% testing one final VDC
+final_v = 'BE';
+vehicles = final_arrival(final_v);
+path = vehicles{1,3};
+center_dealer = path{end};
+dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
+for i = 1:20
+    veh = vehicles(i,:);
+    path = veh{3};
+    d = path{end};
+    if ~isKey(dealer_vehicle_map,d)
+        dealer_vehicle_map(d) = veh;
+    else
+        val = dealer_vehicle_map(d);
+        val(end+1,:) = veh;
+        dealer_vehicle_map(d) = val;
+    end
+end
+route_map = forward_sweep_p1(final_v,center_dealer,dealer_vehicle_map,location);
 
-%find out what vehicles are at what
-%Final VDC's (during time t)
-
-
-%determine what dealers want what vehicles (at time t)
-
-
-%run the travelling salesman algorithm to find out path (at time t)
-
-
-%send the truck - update the location of each vehicle
+%%
+% run the travelling salesman algorithm to find out path (at time t)
 
 
 
