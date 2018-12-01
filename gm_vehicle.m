@@ -308,12 +308,12 @@ toc
 
 %% Last leg: distribute from final VDC to dealers
 % testing one final VDC
-final_v = 'BE';
+final_v = '3A';
 vehicles = final_arrival(final_v);
 path = vehicles{1,3};
 center_dealer = path{end};
 dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
-for i = 1:20
+for i = 1:50
     veh = vehicles(i,:);
     path = veh{3};
     d = path{end};
@@ -325,10 +325,54 @@ for i = 1:20
         dealer_vehicle_map(d) = val;
     end
 end
-route_map = forward_sweep_p1(final_v,center_dealer,dealer_vehicle_map,location);
+route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
 
 %%
 % run the travelling salesman algorithm to find out path (at time t)
+nStop = length(route_map);
+
+final_v = '3A';
+vdc_loc = get_location(final_v,location);
+vehicles = final_arrival(final_v);
+path = vehicles{1,3};
+center_dealer = path{end};
+
+deals = [];
+figure();
+hold on;
+grid on;
+for i = 1:50
+    veh = vehicles(i,:);
+    path = veh{3};
+    d = path{end};
+    if ~ismember(d,deals)
+        deals(end+1) = d;
+    end
+end
+
+lats = zeros(1,length(deals));
+longs = zeros(1,length(deals));
+for i = 1:length(deals)
+    loc = get_location(deals(i),location);
+    lats(i) = loc(1);
+    longs(i) = loc(2);
+end
+
+plot(mod(longs+360,360)-180,lats,'bd','MarkerSize',8);
+center_loc = get_location(center_dealer,location);
+plot(mod(center_loc(2)+360,360)-180,center_loc(1),'ks','MarkerSize',15);
+plot(mod(vdc_loc(2)+360,360)-180,vdc_loc(1),'g*','LineWidth',1.5);
+
+lats = [];
+longs = [];
+selected_dealers = cell2mat(keys(route_map));
+for i = 1:length(selected_dealers)
+    d = selected_dealers(i);
+    loc = get_location(d,location);
+    lats(end+1) = loc(1);
+    longs(end+1) = loc(2);
+end
+plot(mod(longs+360,360)-180,lats,'r*','LineWidth',1.5);
 
 
 
