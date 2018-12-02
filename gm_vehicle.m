@@ -307,6 +307,7 @@ toc
 %       2. remnant vehicles stuck in the network
 
 %% Last leg: distribute from final VDC to dealers
+dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
 look_ahead_time = 0.5;   % 12 hours
 for i = 1:length(final_VDCs)
     final_v = final_VDCs{i};
@@ -320,7 +321,7 @@ for i = 1:length(final_VDCs)
     end
     
     for j = 1:horizon
-        veh = vehicles(i,:);
+        veh = vehicles(j,:);
         path = veh{3};
         d = path{end};
         if ~isKey(dealer_vehicle_map,d)
@@ -332,12 +333,13 @@ for i = 1:length(final_VDCs)
         end
     end
     route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
-    % run the travelling salesman algorithm
+    selected_dealers = cell2mat(keys(route_map));
+    tour = three_opt(final_v,selected_dealers,location);
+    % deliver vehicles
     
 end
 
 
-% nStop = length(route_map);
 
 
 
@@ -351,10 +353,9 @@ end
 
 
 
-
-%% 
+%% Example: plot milkrun tour
 k = keys(final_arrival);
-final_v = k{10};
+final_v = k{11};
 final_v_loc = get_location(final_v,location);
 vehicles = final_arrival(final_v);
 path = vehicles{1,3};
@@ -375,11 +376,12 @@ for i = 1:horizon
     end
 end
 route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
-
 selected_dealers = cell2mat(keys(route_map));
-tour = two_opt(final_v,selected_dealers,location);
+tour = three_opt(final_v,selected_dealers,location);
 
-% tour = {tour{1:4},tour{9},tour{5:8}};
+figure();
+hold on;
+grid on;
 lats = zeros(1,length(tour));
 longs = zeros(1,length(tour));
 total_dist = 0;
@@ -392,14 +394,7 @@ for i = 1:length(tour)
         total_dist = total_dist + road_dist(loc2,loc);
     end
 end
-
-figure();
-hold on;
-grid on;
 p1 = plot(mod(longs+360,360)-180,lats,'-r*');
-% for i = 1:length(lats)
-%     text(mod(longs(i)+360,360)-180,lats(i)+0.05,num2str(tour{i}));
-% end
 
 deals = cell2mat(keys(dealer_vehicle_map));
 lats = zeros(1,length(deals));

@@ -1,6 +1,6 @@
 function tour = three_opt(final_VDC,dealers,location)
 if 1+length(dealers) < 6
-    tour = tsp_2opt(final_VDC,dealers,location);
+    tour = two_opt(final_VDC,dealers,location);
     return;
 end
 
