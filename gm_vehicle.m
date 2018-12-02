@@ -354,7 +354,7 @@ end
 
 %% 
 k = keys(final_arrival);
-final_v = k{5};
+final_v = k{10};
 final_v_loc = get_location(final_v,location);
 vehicles = final_arrival(final_v);
 path = vehicles{1,3};
@@ -376,12 +376,12 @@ for i = 1:horizon
 end
 route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
 
-%% plots
+selected_dealers = cell2mat(keys(route_map));
+tour = two_opt(final_v,selected_dealers,location);
+
+% tour = {tour{1:4},tour{9},tour{5:8}};
 lats = zeros(1,length(tour));
 longs = zeros(1,length(tour));
-selected_dealers = cell2mat(keys(route_map));
-tour = travelling_salesman(final_v,selected_dealers,location);
-
 total_dist = 0;
 for i = 1:length(tour)
     loc = get_location(tour{i},location);
@@ -397,6 +397,9 @@ figure();
 hold on;
 grid on;
 p1 = plot(mod(longs+360,360)-180,lats,'-r*');
+% for i = 1:length(lats)
+%     text(mod(longs(i)+360,360)-180,lats(i)+0.05,num2str(tour{i}));
+% end
 
 deals = cell2mat(keys(dealer_vehicle_map));
 lats = zeros(1,length(deals));
@@ -410,6 +413,7 @@ p2 = plot(mod(longs+360,360)-180,lats,'bd','MarkerSize',8);
 p3 = plot(mod(center_loc(2)+360,360)-180,center_loc(1),'ks','MarkerSize',15);
 p4 = plot(mod(final_v_loc(2)+360,360)-180,final_v_loc(1),'ko','MarkerSize',10);
 legend([p1,p2,p3,p4],{'selected','dealers','center dealer','final VDC'});
+axis equal;
 
 %% Distribution of car productionplant_arrival_time
 first_date = floor(min(plant_arrival_time));
