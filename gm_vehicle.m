@@ -307,13 +307,56 @@ toc
 %       2. remnant vehicles stuck in the network
 
 %% Last leg: distribute from final VDC to dealers
-% testing one final VDC
-final_v = '3A';
+look_ahead_time = 0.5;   % 12 hours
+for i = 1:length(final_VDCs)
+    final_v = final_VDCs{i};
+    vehicles = final_arrival(final_v);
+    path = vehicles{1,3};
+    center_dealer = path{end};
+    % find horizon
+    horizon = 1;
+    while vehicles{horizon,2} - vehicles{1,2} < look_ahead_time
+        horizon = horizon + 1;
+    end
+    
+    for j = 1:horizon
+        veh = vehicles(i,:);
+        path = veh{3};
+        d = path{end};
+        if ~isKey(dealer_vehicle_map,d)
+            dealer_vehicle_map(d) = veh;
+        else
+            val = dealer_vehicle_map(d);
+            val(end+1,:) = veh;
+            dealer_vehicle_map(d) = val;
+        end
+    end
+    route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
+    % run the travelling salesman algorithm
+    
+end
+
+
+% nStop = length(route_map);
+
+
+
+
+
+
+
+
+%% 
+k = keys(final_arrival);
+final_v = k{5};
+final_v_loc = get_location(final_v,location);
 vehicles = final_arrival(final_v);
 path = vehicles{1,3};
 center_dealer = path{end};
+center_loc = get_location(center_dealer,location);
 dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
-for i = 1:50
+horizon = min(size(vehicles,1), 50);
+for i = 1:horizon
     veh = vehicles(i,:);
     path = veh{3};
     d = path{end};
@@ -327,29 +370,23 @@ for i = 1:50
 end
 route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
 
-%%
-% run the travelling salesman algorithm to find out path (at time t)
-nStop = length(route_map);
+% plots
+lats = zeros(1,length(tour));
+longs = zeros(1,length(tour));
+selected_dealers = cell2mat(keys(route_map));
+tour = travelling_salesman(final_v,center_dealer,selected_dealers,location);
+for i = 1:length(tour)
+    d = tour{i};
+    loc = get_location(d,location);
+    lats(i) = loc(1);
+    longs(i) = loc(2);
+end
 
-final_v = '3A';
-vdc_loc = get_location(final_v,location);
-vehicles = final_arrival(final_v);
-path = vehicles{1,3};
-center_dealer = path{end};
-
-deals = [];
 figure();
 hold on;
 grid on;
-for i = 1:50
-    veh = vehicles(i,:);
-    path = veh{3};
-    d = path{end};
-    if ~ismember(d,deals)
-        deals(end+1) = d;
-    end
-end
-
+p1 = plot(mod(longs+360,360)-180,lats,'-r*');
+deals = cell2mat(keys(dealer_vehicle_map));
 lats = zeros(1,length(deals));
 longs = zeros(1,length(deals));
 for i = 1:length(deals)
@@ -357,28 +394,10 @@ for i = 1:length(deals)
     lats(i) = loc(1);
     longs(i) = loc(2);
 end
-
-plot(mod(longs+360,360)-180,lats,'bd','MarkerSize',8);
-center_loc = get_location(center_dealer,location);
-plot(mod(center_loc(2)+360,360)-180,center_loc(1),'ks','MarkerSize',15);
-plot(mod(vdc_loc(2)+360,360)-180,vdc_loc(1),'g*','LineWidth',1.5);
-
-lats = [];
-longs = [];
-selected_dealers = cell2mat(keys(route_map));
-for i = 1:length(selected_dealers)
-    d = selected_dealers(i);
-    loc = get_location(d,location);
-    lats(end+1) = loc(1);
-    longs(end+1) = loc(2);
-end
-plot(mod(longs+360,360)-180,lats,'r*','LineWidth',1.5);
-
-
-
-
-
-
+p2 = plot(mod(longs+360,360)-180,lats,'bd','MarkerSize',8);
+p3 = plot(mod(center_loc(2)+360,360)-180,center_loc(1),'ks','MarkerSize',15);
+p4 = plot(mod(final_v_loc(2)+360,360)-180,final_v_loc(1),'ko','MarkerSize',10);
+legend([p1,p2,p3,p4],{'selected','dealers','center dealer','final VDC'});
 
 %% Distribution of car productionplant_arrival_time
 first_date = floor(min(plant_arrival_time));

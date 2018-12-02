@@ -4,6 +4,19 @@ function route_map = forward_sweep(final_VDC,center_dealer,...
 shift = @(long) mod(long+360,360)-180;
 vdc_loc = get_location(final_VDC,location);
 dealers = cell2mat(keys(dealer_vehicle_map)');
+route_map = containers.Map('KeyType','double','ValueType','any');
+
+% if the total vehicles is <= 10, we return directly.
+count = 0;
+for i = 1:length(dealers)
+    count = count + size(dealer_vehicle_map(dealers(i)),1);
+end
+if count <= 10
+    for i = 1:length(dealers)
+        route_map(dealers(i)) = dealer_vehicle_map(dealers(i));
+    end
+    return;
+end
 
 center_loc = get_location(center_dealer,location);
 dy = center_loc(1) - vdc_loc(1);
@@ -24,7 +37,6 @@ for i = 1:length(dealers)
     end
 end
 
-route_map = containers.Map('KeyType','double','ValueType','any');
 total_veh = size(dealer_vehicle_map(center_dealer),1);
 if total_veh >= 10
     vehicles = dealer_vehicle_map(center_dealer);
