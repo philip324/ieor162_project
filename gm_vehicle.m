@@ -346,6 +346,12 @@ end
 
 
 
+
+
+
+
+
+
 %% 
 k = keys(final_arrival);
 final_v = k{5};
@@ -370,22 +376,28 @@ for i = 1:horizon
 end
 route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
 
-% plots
+%% plots
 lats = zeros(1,length(tour));
 longs = zeros(1,length(tour));
 selected_dealers = cell2mat(keys(route_map));
-tour = travelling_salesman(final_v,center_dealer,selected_dealers,location);
+tour = travelling_salesman(final_v,selected_dealers,location);
+
+total_dist = 0;
 for i = 1:length(tour)
-    d = tour{i};
-    loc = get_location(d,location);
+    loc = get_location(tour{i},location);
     lats(i) = loc(1);
     longs(i) = loc(2);
+    if i > 1
+        loc2 = get_location(tour{i-1},location);
+        total_dist = total_dist + road_dist(loc2,loc);
+    end
 end
 
 figure();
 hold on;
 grid on;
 p1 = plot(mod(longs+360,360)-180,lats,'-r*');
+
 deals = cell2mat(keys(dealer_vehicle_map));
 lats = zeros(1,length(deals));
 longs = zeros(1,length(deals));
@@ -411,8 +423,7 @@ for i = 1:length(shipment_req)
         vehicle_distribution(idx) = vehicle_distribution(idx) + 1;
     end
 end
-% day 425 (Feb. 29th, 2016) is 0
-% day 59 (Feb. 28th, 2015) is 6317
+
 figure();
 hold on;
 plot(first_date:last_date, vehicle_distribution);

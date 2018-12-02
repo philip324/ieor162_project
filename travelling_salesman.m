@@ -1,4 +1,4 @@
-function tour = travelling_salesman(final_VDC,center_dealer,dealers,location)
+function tour = travelling_salesman(final_VDC,dealers,location)
 % final_VDC is a string, dealers is an array
 % use nearest neighbor heuristic to get an initial tour
 tour = cell(1,1+length(dealers));
@@ -32,13 +32,15 @@ while ~all(temp_tour == new_tour)
     temp_tour = new_tour;
     for s = 1:length(temp_tour)-3
         for t = s+3:length(temp_tour)
-            start = temp_tour(s);
-            terminal = temp_tour(t);
-            if start == 0
+            if s == 1
                 start = final_VDC;
+            else
+                start = temp_tour(s);
             end
-            if terminal == 0
+            if t == length(temp_tour)
                 terminal = final_VDC;
+            else
+                terminal = temp_tour(t);
             end
             
             loc1 = get_location(start,location);
@@ -46,8 +48,13 @@ while ~all(temp_tour == new_tour)
             loc3 = get_location(temp_tour(t-1),location);
             loc4 = get_location(terminal,location);
             
-            original_dist = road_dist(loc1,loc2) + road_dist(loc3,loc4);
-            new_dist = road_dist(loc1,loc3) + road_dist(loc2,loc4);
+            if ischar(terminal)
+                original_dist = road_dist(loc1,loc2);
+                new_dist = road_dist(loc1,loc3);
+            else
+                original_dist = road_dist(loc1,loc2) + road_dist(loc3,loc4);
+                new_dist = road_dist(loc1,loc3) + road_dist(loc2,loc4);
+            end
             if new_dist < original_dist
                 new_tour = [temp_tour(1:s),temp_tour(t-1:-1:s+1),temp_tour(t:end)];
                 break;
@@ -58,13 +65,5 @@ while ~all(temp_tour == new_tour)
         end
     end
 end
-
-% check where is the center_dealer
-new_tour = new_tour(2:end-1);
-idx = find(new_tour == center_dealer);
-if idx <= floor(length(new_tour)/2)
-    tour(2:end) = num2cell(new_tour);
-else
-    tour(2:end) = num2cell(fliplr(new_tour));
-end
+tour(2:end) = num2cell(new_tour(2:end-1));
 end
