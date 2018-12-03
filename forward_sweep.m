@@ -6,16 +6,16 @@ vdc_loc = get_location(final_VDC,location);
 dealers = cell2mat(keys(dealer_vehicle_map)');
 route_map = containers.Map('KeyType','double','ValueType','any');
 
-% if the total vehicles is <= 10, we return directly.
 count = 0;
 for i = 1:length(dealers)
     count = count + size(dealer_vehicle_map(dealers(i)),1);
 end
+% if the total vehicles is <= 10, we return directly.
 if count <= 10
     for i = 1:length(dealers)
         route_map(dealers(i)) = dealer_vehicle_map(dealers(i));
     end
-    return;
+    return
 end
 
 center_loc = get_location(center_dealer,location);
@@ -37,6 +37,7 @@ for i = 1:length(dealers)
     end
 end
 
+% if center dealer has more than 10 vehicles, we return directly.
 total_veh = size(dealer_vehicle_map(center_dealer),1);
 if total_veh >= 10
     vehicles = dealer_vehicle_map(center_dealer);

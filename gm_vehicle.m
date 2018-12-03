@@ -19,8 +19,8 @@ sorted_plant_arrival_time = sort(cell2mat(keys(arrival_time_map)));
 
 load processed_data.mat
 input_data = 'Input_Cost%2C+Location.xlsx';
-dataset_1 = 'dataset_1/VehicleShipmentRequirement_DataSet1';
-dataset_2 = 'dataset_2/VehicleShipmentRequirement_DataSet2';
+dataset_1 = 'DataSet1/VehicleShipmentRequirement_DataSet1';
+dataset_2 = 'DataSet2/VehicleShipmentRequirement_DataSet2';
 final_prob = 'final_problem/Problem_VehicleShipmentRequirement.csv';
 
 [~,~,location] = xlsread(input_data,1);
@@ -105,6 +105,7 @@ for i = 1:numel(VDCs)
     overflow_vehicles(VDCs{i}) = 0;
     overflow_days(VDCs{i}) = 0;
 end
+
 % 'vdc' --> (timestamp, inventory)
 curr_inventory = containers.Map('KeyType','char','ValueType','any');
 % 'vdc' --> (vid, arrive_time, path, modes)
@@ -338,21 +339,29 @@ end
 toc
 
 %% Last leg: distribute from final VDC to dealers
-dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
+% truck transportation information
+load Jan_31st_2015.mat
+speed = 30;
+load_factor = 10;
+fixed_cost = 200;
+variable_cost = 4;
+
 look_ahead_time = 2;   % 2 days
 tic
-for i = 1:1%length(final_VDCs)
+for i = 1:length(final_VDCs)
     final_v = final_VDCs{i};
     vehicles = final_arrival(final_v);
     count = 0;
     while ~isempty(vehicles)
+        dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
         path = vehicles{1,3};
         center_dealer = path{end};
         % find horizon
-        horizon = min(50,size(vehicles,1));
-%         while vehicles{horizon,2} - vehicles{1,2} < look_ahead_time && horizon <= size(vehicles,1)
-%             horizon = horizon + 1;
-%         end
+        horizon = 1;
+        while horizon < size(vehicles,1) && vehicles{horizon,2} - vehicles{1,2} < look_ahead_time
+            horizon = horizon + 1;
+        end
+        
         for j = 1:horizon
             veh = vehicles(j,:);
             path = veh{3};
@@ -367,16 +376,49 @@ for i = 1:1%length(final_VDCs)
         end
         route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
         selected_dealers = cell2mat(keys(route_map));
-        tour = three_opt(final_v,selected_dealers,location);
+        [tour,total_dist] = three_opt(final_v,selected_dealers,location);
+        
         % deliver vehicles
-        for j = 1:length(tour)-1
-            shipped_veh = route_map(tour{j+1});
-            vids = shipped_veh(:,1);
-            for k = 1:length(vids)
-                idx = find(ismember(vehicles(1:horizon,1),vids(k)),1);
-                vehicles(idx,:) = [];
-            end
+        shipped_vehicles = cell(0,size(vehicles,2));
+        for j = 1:length(selected_dealers)
+            shipped_veh = route_map(selected_dealers(j));
+            shipped_vehicles(end+1:end+size(shipped_veh,1),:) = shipped_veh;
         end
+        
+        % deliver timetable
+        curr_time = shipped_vehicles{end,2};
+        delivered_time = containers.Map('KeyType','double','ValueType','double');
+        for j = 2:length(tour)
+            loc1 = get_location(tour{j-1},location);
+            loc2 = get_location(tour{j},location);
+            dist = road_dist(loc1,loc2);
+            delivered_time(tour{j}) = curr_time + (dist/speed)/24;
+            curr_time = delivered_time(tour{j});
+        end
+        
+        for j = 1:size(shipped_vehicles,1)
+            shipped_veh = shipped_vehicles(j,:);
+            
+            vid = shipped_veh{1};
+            path = shipped_veh{3};
+            d = path{end};
+            details = {d, delivered_time(d), delivered_time(d), 'T'};
+            if ~isKey(routing_map,vid)
+                routing_map(vid) = details;
+            else
+                val = routing_map(vid);
+                val(end+1,:) = details;
+                routing_map(vid) = val;
+            end
+            
+            idx = find(ismember(vehicles(:,1),shipped_veh(1)),1);
+            vehicles(idx,:) = [];
+        end
+        
+        % calculate transporation cost
+        outflow = size(shipped_vehicles,1);
+        trans_cost = (total_dist*variable_cost+fixed_cost) * ceil(outflow/load_factor);
+        logistics_cost = logistics_cost + trans_cost;
         
         count = count + 1;
         if mod(count,50) == 0
@@ -390,25 +432,43 @@ for i = 1:1%length(final_VDCs)
 end
 toc
 
+%% Calculate late penalty cost (10 per day)
+late_cost = 0;
+ks = keys(routing_map);
+lead_time = containers.Map('KeyType','char','ValueType','double');
+tic
+for i = 1:length(routing_map)
+    info = routing_map(ks{i});
+    duration = info{end,2} - info{1,2};
+    late_cost = late_cost + 10*ceil(duration);
+    lead_time(ks{i}) = duration;
+end
+toc
 
+%% Calculate VDC cost
+fixed_cost_vdc = 0;
+annual_cost_vdc = 730;
+handling_cost_vdc = 50;
+overflow_shuttle_cost = 30;
+overflow_variable_cost = 4;
 
+vdc_cost = 0;
+for i = 1:length(VDCs)
+    v = VDCs{i};
+    cost = annual_cost_vdc*get_capacity(v,VDC_capacity) + handling_cost_vdc*handled_vehicles(v)...
+        + overflow_shuttle_cost*overflow_vehicles(v) + overflow_variable_cost*overflow_days(v);
+    vdc_cost = vdc_cost + cost;
+end
 
-
-
-
-
-
-
-
-
-
+%% Total cost
+total_cost = logistics_cost + late_cost + vdc_cost;
 
 %% Example: plot milkrun tour
 dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
 look_ahead_time = 2;   % 2 days
 
 k = keys(final_arrival);
-final_v = k{7};
+final_v = k{7};     % choose an arbitrary final vdc to visualize results
 final_v_loc = get_location(final_v,location);
 vehicles = final_arrival(final_v);
 path = vehicles{1,3};
@@ -433,22 +493,17 @@ for i = 1:horizon
 end
 route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
 selected_dealers = cell2mat(keys(route_map));
-tour = three_opt(final_v,selected_dealers,location);
+[tour,total_dist] = three_opt(final_v,selected_dealers,location);
 
 figure();
 hold on;
 grid on;
 lats = zeros(1,length(tour));
 longs = zeros(1,length(tour));
-total_dist = 0;
 for i = 1:length(tour)
     loc = get_location(tour{i},location);
     lats(i) = loc(1);
     longs(i) = loc(2);
-    if i > 1
-        loc2 = get_location(tour{i-1},location);
-        total_dist = total_dist + road_dist(loc2,loc);
-    end
 end
 p1 = plot(mod(longs+360,360)-180,lats,'-r*');
 

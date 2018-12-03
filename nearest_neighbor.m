@@ -1,7 +1,8 @@
-function tour = nearest_neighbor(final_VDC,dealers,location)
+function [tour,total_dist] = nearest_neighbor(final_VDC,dealers,location)
 tour = cell(1,1+length(dealers));
 tour(1) = {final_VDC};
 idx = 1;
+total_dist = 0;
 while ~isempty(dealers)
     loc1 = get_location(tour{idx},location);
     
@@ -18,5 +19,6 @@ while ~isempty(dealers)
     idx = idx + 1;
     tour(idx) = {dealers(min_idx)};
     dealers(min_idx) = [];
+    total_dist = total_dist + min_dist;
 end
 end

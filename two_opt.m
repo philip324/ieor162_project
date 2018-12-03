@@ -1,5 +1,5 @@
-function tour = two_opt(final_VDC,dealers,location)
-tour = nearest_neighbor(final_VDC,dealers,location);
+function [tour,total_dist] = two_opt(final_VDC,dealers,location)
+[tour,total_dist] = nearest_neighbor(final_VDC,dealers,location);
 if length(tour) < 4
     return
 end
@@ -59,4 +59,10 @@ while flag
     end
 end
 tour(2:end) = num2cell(new_tour(2:end-1));
+total_dist = 0;
+for i = 2:length(tour)
+    loc1 = get_location(tour{i-1},location);
+    loc2 = get_location(tour{i},location);
+    total_dist = total_dist + road_dist(loc1,loc2);
+end
 end
