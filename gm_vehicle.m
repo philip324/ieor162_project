@@ -78,6 +78,7 @@ for i = 1:numel(final_VDCs)
     FID(i) = find(ismember(VDCs,final_VDCs(i)),1);
 end
 
+tic
 shortest_routes = containers.Map('KeyType','char','ValueType','any');
 for i = 1:numel(plants)
     for j = 1:numel(final_VDCs)
@@ -92,6 +93,7 @@ for i = 1:numel(plants)
         end
     end
 end
+disp(['Processing time: ',num2str(round(toc,2)),' sec']);
 
 %% Initializing variables
 % 'vdc' --> double
@@ -115,9 +117,9 @@ edge_flows = containers.Map('KeyType','char','ValueType','double');
 routing_map = containers.Map('KeyType','char','ValueType','any');
 
 %% Choose a subset of the dataset
-% future = datenum('31-Jan-2015 23:59:59');
-% cutoff = find(sorted_plant_arrival_time < future, 1, 'last');
-cutoff = 1e3;
+future = datenum('31-Jan-2015 23:59:59');
+cutoff = find(sorted_plant_arrival_time < future, 1, 'last');
+% cutoff = 1e4;
 timeline = sorted_plant_arrival_time(1:cutoff);
 
 tic
@@ -156,18 +158,18 @@ for i = 1:length(timeline)
     end
     all_arrivals(t) = vdc_table;
 end
-toc
+disp(['Processing time: ',num2str(round(toc,2)),' sec']);
 
 %% Find final VDC arrival time for each vehicle
 tic
 count = 0;
+logistics_cost = 0;
 while ~isempty(timeline)
     % get latest arrival time
     curr_time = timeline(1);
     timeline(1) = [];
     arrive_table = all_arrivals(curr_time);
     remove(all_arrivals, curr_time);
-    
     for i = 1:size(arrive_table,1)
         curr_VDC = arrive_table{i,1};
         arriving_vehicles = arrive_table{i,2};
@@ -201,20 +203,26 @@ while ~isempty(timeline)
                 depart_table(idx,2) = {val};
             end
         end
-        outflows = 0;
+        
         % check if there exists a full load along some edges
+        outflows = 0;
         for j = 1:size(depart_table,1)
             next_VDC = depart_table{j,1};
             departing_vehicles = depart_table{j,2};
-            
-            mode = trans_modes(find(ismember(VDCs,curr_VDC),1), ...
-                               find(ismember(VDCs,next_VDC),1));
+            % determine transportation mode
+            idx1 = find(ismember(VDCs,curr_VDC),1);
+            idx2 = find(ismember(VDCs,next_VDC),1);
+            mode = trans_modes(idx1, idx2);
             if strcmp(mode,'T')
-                load_factor = 10;
                 speed = 30;
+                load_factor = 10;
+                fixed_cost = 200;
+                variable_cost = 4;
             elseif strcmp(mode,'R')
-                load_factor = 20;
                 speed = 10;
+                load_factor = 20;
+                fixed_cost = 2000;
+                variable_cost = 3;
             end
             
             edge = [curr_VDC,' ',next_VDC];
@@ -254,9 +262,10 @@ while ~isempty(timeline)
             % send departing vehicles to the next destination
             curr_loc = get_location(curr_VDC,location);
             next_loc = get_location(next_VDC,location);
-            duration = road_dist(curr_loc,next_loc)/speed;
-            next_time = curr_time + duration/24;
+            dist = road_dist(curr_loc,next_loc);
+            next_time = curr_time + (dist/speed)/24;
             
+            % VIN level routing details
             for k = 1:outflow
                 depart_veh = departing_vehicles(k,:);
                 vid = depart_veh{1};
@@ -289,6 +298,10 @@ while ~isempty(timeline)
                     timeline = [next_time, timeline];
                 end
             end
+            
+            % calculate the transportation cost
+            trans_cost = (dist*variable_cost+fixed_cost)*ceil(outflow/load_factor);
+            logistics_cost = logistics_cost + trans_cost;
         end
         
         % overflow information
@@ -315,7 +328,7 @@ while ~isempty(timeline)
     end
     
     count = count + 1;
-    if mod(count,cutoff/10) == 0
+    if mod(count,5e3) == 0
         disp(['iteration ',num2str(count)]);
         disp(['Processing time: ',num2str(round(toc,2)),' sec']);
         disp(' ');
@@ -326,37 +339,56 @@ toc
 
 %% Last leg: distribute from final VDC to dealers
 dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
-look_ahead_time = 0.5;   % 12 hours
-for i = 1:length(final_VDCs)
+look_ahead_time = 2;   % 2 days
+tic
+for i = 1:1%length(final_VDCs)
     final_v = final_VDCs{i};
     vehicles = final_arrival(final_v);
-    path = vehicles{1,3};
-    center_dealer = path{end};
-    % find horizon
-    horizon = 1;
-    while vehicles{horizon,2} - vehicles{1,2} < look_ahead_time
-        horizon = horizon + 1;
-    end
-    
-    for j = 1:horizon
-        veh = vehicles(j,:);
-        path = veh{3};
-        d = path{end};
-        if ~isKey(dealer_vehicle_map,d)
-            dealer_vehicle_map(d) = veh;
-        else
-            val = dealer_vehicle_map(d);
-            val(end+1,:) = veh;
-            dealer_vehicle_map(d) = val;
+    count = 0;
+    while ~isempty(vehicles)
+        path = vehicles{1,3};
+        center_dealer = path{end};
+        % find horizon
+        horizon = min(50,size(vehicles,1));
+%         while vehicles{horizon,2} - vehicles{1,2} < look_ahead_time && horizon <= size(vehicles,1)
+%             horizon = horizon + 1;
+%         end
+        for j = 1:horizon
+            veh = vehicles(j,:);
+            path = veh{3};
+            d = path{end};
+            if ~isKey(dealer_vehicle_map,d)
+                dealer_vehicle_map(d) = veh;
+            else
+                val = dealer_vehicle_map(d);
+                val(end+1,:) = veh;
+                dealer_vehicle_map(d) = val;
+            end
+        end
+        route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
+        selected_dealers = cell2mat(keys(route_map));
+        tour = three_opt(final_v,selected_dealers,location);
+        % deliver vehicles
+        for j = 1:length(tour)-1
+            shipped_veh = route_map(tour{j+1});
+            vids = shipped_veh(:,1);
+            for k = 1:length(vids)
+                idx = find(ismember(vehicles(1:horizon,1),vids(k)),1);
+                vehicles(idx,:) = [];
+            end
+        end
+        
+        count = count + 1;
+        if mod(count,50) == 0
+            disp(['iteration ',num2str(count)]);
+            disp(['Processing time: ',num2str(round(toc,2)),' sec']);
+            disp(['Length of vehicles: ',num2str(size(vehicles,1))]);
+            disp(' ');
+            tic
         end
     end
-    route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
-    selected_dealers = cell2mat(keys(route_map));
-    tour = three_opt(final_v,selected_dealers,location);
-    % deliver vehicles
-    
 end
-
+toc
 
 
 
@@ -372,15 +404,21 @@ end
 
 
 %% Example: plot milkrun tour
+dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
+look_ahead_time = 2;   % 2 days
+
 k = keys(final_arrival);
-final_v = k{8};
+final_v = k{7};
 final_v_loc = get_location(final_v,location);
 vehicles = final_arrival(final_v);
 path = vehicles{1,3};
 center_dealer = path{end};
 center_loc = get_location(center_dealer,location);
-dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
-horizon = min(size(vehicles,1), 50);
+
+horizon = 2;
+while vehicles{horizon,2} - vehicles{1,2} < look_ahead_time && horizon <= size(vehicles,1)
+    horizon = horizon + 1;
+end
 for i = 1:horizon
     veh = vehicles(i,:);
     path = veh{3};
