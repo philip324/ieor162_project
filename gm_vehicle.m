@@ -1,6 +1,7 @@
 %% IEOR 162, Project
 
-%% 
+%% Preparation
+% Put Problem_VehicleShipmentRequirement.csv in ./final_problem/ directory
 homedir = pwd;
 new_dir = sprintf('%s/final_problem', homedir);
 if ~exist(new_dir, 'dir')
@@ -8,7 +9,6 @@ if ~exist(new_dir, 'dir')
 end
 
 %% load data
-% Evaluate cell element using C{i,j}, view cell element using C(i,j).
 clear;
 close all;
 clc
@@ -60,7 +60,7 @@ shipment_req(:,3) = num2cell(C{3});
 shipment_req(:,4) = C{4};
 disp(['Processing time: ',num2str(round(toc,2)),' sec']);
 
-%% Shortest Paths
+%% Find Shortest Paths
 % Get lists of dealers and VDCs
 dealers = num2cell(union(cell2mat(shipment_req(:,3)),shipment_req{1,3}));
 VDCs = VDC_capacity(:,1);
@@ -118,9 +118,10 @@ edge_flows = containers.Map('KeyType','char','ValueType','double');
 routing_map = containers.Map('KeyType','char','ValueType','any');
 
 %% Choose a subset of the dataset
+% cutoff = 1e4;
 future = datenum('31-Jan-2015 23:59:59');
 cutoff = find(sorted_plant_arrival_time < future, 1, 'last');
-% cutoff = 1e4;
+% cutoff = length(sorted_plant_arrival_time);
 timeline = sorted_plant_arrival_time(1:cutoff);
 
 tic
@@ -339,7 +340,6 @@ end
 toc
 
 %% Last leg: distribute from final VDC to dealers
-% truck transportation information
 load Jan_31st_2015.mat
 speed = 30;
 load_factor = 10;
@@ -352,6 +352,8 @@ for i = 1:length(final_VDCs)
     final_v = final_VDCs{i};
     vehicles = final_arrival(final_v);
     count = 0;
+    disp([num2str(i),' VDC: ',final_v]);
+    
     while ~isempty(vehicles)
         dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
         path = vehicles{1,3};
@@ -432,20 +434,19 @@ for i = 1:length(final_VDCs)
 end
 toc
 
-%% Calculate late penalty cost (10 per day)
+%% Calculate costs
+% Calculate late penalty cost (10 dollars per day)
 late_cost = 0;
 ks = keys(routing_map);
 lead_time = containers.Map('KeyType','char','ValueType','double');
-tic
 for i = 1:length(routing_map)
     info = routing_map(ks{i});
     duration = info{end,2} - info{1,2};
     late_cost = late_cost + 10*ceil(duration);
     lead_time(ks{i}) = duration;
 end
-toc
 
-%% Calculate VDC cost
+% Calculate VDC cost
 fixed_cost_vdc = 0;
 annual_cost_vdc = 730;
 handling_cost_vdc = 50;
@@ -460,10 +461,17 @@ for i = 1:length(VDCs)
     vdc_cost = vdc_cost + cost;
 end
 
-%% Total cost
+% Total cost
 total_cost = logistics_cost + late_cost + vdc_cost;
 
-%% Example: plot milkrun tour
+
+
+%% Visualization
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%                  Below are codes for visualization                  %%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% Visualize a milkrun tour
 dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
 look_ahead_time = 2;   % 2 days
 
@@ -521,7 +529,7 @@ p4 = plot(mod(final_v_loc(2)+360,360)-180,final_v_loc(1),'ko','MarkerSize',10);
 legend([p1,p2,p3,p4],{'selected','dealers','center dealer','final VDC'});
 axis equal;
 
-%% Distribution of car productionplant_arrival_time
+%% Visualize distribution of car production
 first_date = floor(min(plant_arrival_time));
 last_date = first_date + 365*2;
 duration = last_date-first_date+1;
@@ -542,8 +550,32 @@ grid on;
 datetick('x');
 title('Vehicle production distribution (2015-2017)');
 
-%% get all VDCs and dealers' locations
+%% Visualize VDC dealer pairs
+figure();
+hold on;
+grid on;
+k = keys(VDC2dealer);
+colors = hsv(length(k));
 tic
+for i = 1:length(k)
+    v = k{i};
+    v_loc = get_location(v,location);
+    ds = VDC2dealer(v);
+    ds = ds{:};
+    for j = 1:length(ds)
+        d = ds(j);
+        d_loc = get_location(d,location);
+        plot(mod(d_loc(2)+360,360)-180,d_loc(1),'.','color',colors(i,:));
+    end
+    plot(mod(v_loc(2)+360,360)-180,v_loc(1),'*k');
+end
+xlim([-60 60]);
+axis equal;
+xlabel('longitude (offset = 180 degree)');
+ylabel('latitude');
+toc
+
+%% Visualize shortest path from plants to final VDCs
 dealer_loc = zeros(numel(dealers),2);
 for i = 1:numel(dealers)
     d_loc = get_location(dealers{i},location);
@@ -554,9 +586,7 @@ for i = 1:numel(VDCs)
     v_loc = get_location(VDCs{i},location);
     VDC_loc(i,:) = v_loc;
 end
-toc
 
-%% Plot shortest path from plant to other VDCs
 tic
 for i = 1:numel(plants)
     figure();
@@ -585,31 +615,6 @@ for i = 1:numel(plants)
     title(['Plant ',plants{i}]);
     legend('dealer','VDC');
 end
-toc
-
-%% visualize VDC dealer pairs
-figure();
-hold on;
-grid on;
-k = keys(VDC2dealer);
-colors = hsv(length(k));
-tic
-for i = 1:length(k)
-    v = k{i};
-    v_loc = get_location(v,location);
-    ds = VDC2dealer(v);
-    ds = ds{:};
-    for j = 1:length(ds)
-        d = ds(j);
-        d_loc = get_location(d,location);
-        plot(mod(d_loc(2)+360,360)-180,d_loc(1),'.','color',colors(i,:));
-    end
-    plot(mod(v_loc(2)+360,360)-180,v_loc(1),'*k');
-end
-xlim([-60 60]);
-axis equal;
-xlabel('longitude (offset = 180 degree)');
-ylabel('latitude');
 toc
 
 %% Attribution
