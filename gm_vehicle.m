@@ -446,14 +446,20 @@ for i = 1:length(ks)
         [tour,total_dist] = three_opt(final_v,selected_dealers,location);
         
         % deliver vehicles
+        depart_time = 0;
         shipped_vehicles = cell(0,size(vehicles,2));
         for j = 1:length(selected_dealers)
             shipped_veh = delivery_map(selected_dealers(j));
+            for k = 1:size(shipped_veh,1)
+                if shipped_veh{k,2} > depart_time
+                    depart_time = shipped_veh{k,2};
+                end
+            end
             shipped_vehicles(end+1:end+size(shipped_veh,1),:) = shipped_veh;
         end
         
         % deliver timetable
-        curr_time = shipped_vehicles{end,2};
+        curr_time = depart_time;
         delivered_time = containers.Map('KeyType','double','ValueType','double');
         for j = 2:length(tour)
             loc1 = get_location(tour{j-1},location);
@@ -467,11 +473,15 @@ for i = 1:length(ks)
             shipped_veh = shipped_vehicles(j,:);
             
             vid = shipped_veh{1};
+            arrive_time = shipped_veh{2};
             path = shipped_veh{3};
             d = path{end};
             details = {d, delivered_time(d), delivered_time(d), 'T'};
             if ~isKey(routing_map,vid)
-                routing_map(vid) = details;
+                % plant is the final vdc for these vehicles
+                val = {d, arrive_time, depart_time, 'T'};
+                val(end+1,:) = details;
+                routing_map(vid) = val;
             else
                 val = routing_map(vid);
                 val(end+1,:) = details;
@@ -508,7 +518,7 @@ ks = keys(routing_map);
 lead_time = containers.Map('KeyType','char','ValueType','double');
 for i = 1:length(routing_map)
     info = routing_map(ks{i});
-    duration = info{end,2} - info{1,2};
+    duration = round(info{end,2}-info{1,2}, 2);
     lead_time(ks{i}) = duration;
 end
 late_cost = 10 * sum(cell2mat(values(lead_time)));
@@ -530,6 +540,20 @@ end
 % Total cost
 total_cost = logistics_cost + late_cost + vdc_cost;
 
+%%
+ks = keys(lead_time);
+temp = containers.Map('KeyType','double','ValueType','double');
+for i = 1:length(ks)
+    vid = ks{i};
+    if lead_time(vid) <= 0
+        detail = routing_map(vid);
+        if ~isKey(temp,size(detail,1))
+            temp(size(detail,1)) = 1;
+        else
+            temp(size(detail,1)) = temp(size(detail,1)) + 1;
+        end
+    end
+end
 
 
 %% Visualization
