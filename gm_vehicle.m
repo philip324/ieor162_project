@@ -118,11 +118,12 @@ edge_flows = containers.Map('KeyType','char','ValueType','double');
 routing_map = containers.Map('KeyType','char','ValueType','any');
 
 %% Choose a subset of the dataset
-% cutoff = 1e4;
-future = datenum('31-Jan-2015 23:59:59');
-cutoff = find(sorted_plant_arrival_time < future, 1, 'last');
-% cutoff = length(sorted_plant_arrival_time);
-timeline = sorted_plant_arrival_time(1:cutoff);
+% Third quarter of 2015
+start_date = datenum('01-Jul-2015 00:00:00');
+stop_date = datenum('30-Sep-2015 23:59:59');
+start = find(sorted_plant_arrival_time >= start_date, 1, 'first');
+stop = find(sorted_plant_arrival_time <= stop_date, 1, 'last');
+timeline = sorted_plant_arrival_time(start:stop);
 
 tic
 % arrival_time --> (vid, arrival_time, path, curr_vdc)
@@ -324,7 +325,7 @@ while ~isempty(timeline)
         curr_inventory(curr_VDC) = {curr_time, prev_inventory+netflows};
         if prev_overflow > 0
             prev_time = past{1};
-            duration = ceil(curr_time-prev_time);
+            duration = floor(curr_time-prev_time);
             overflow_days(curr_VDC) = overflow_days(curr_VDC) + duration*prev_overflow;
         end
     end
@@ -339,8 +340,10 @@ while ~isempty(timeline)
 end
 toc
 
+save('intermediate_third_quarter_2015.mat','handled_vehicles','overflow_vehicles',...
+     'overflow_days','final_arrival','routing_map','logistics_cost');
+
 %% Last leg: distribute from final VDC to dealers
-load Jan_31st_2015.mat
 speed = 30;
 load_factor = 10;
 fixed_cost = 200;
@@ -434,6 +437,9 @@ for i = 1:length(final_VDCs)
 end
 toc
 
+save('final_third_quarter_2015.mat','handled_vehicles','overflow_vehicles',...
+     'overflow_days','routing_map','logistics_cost');
+
 %% Calculate costs
 % Calculate late penalty cost (10 dollars per day)
 late_cost = 0;
@@ -442,7 +448,7 @@ lead_time = containers.Map('KeyType','char','ValueType','double');
 for i = 1:length(routing_map)
     info = routing_map(ks{i});
     duration = info{end,2} - info{1,2};
-    late_cost = late_cost + 10*ceil(duration);
+    late_cost = late_cost + 10*floor(duration);
     lead_time(ks{i}) = duration;
 end
 
@@ -476,17 +482,14 @@ dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
 look_ahead_time = 2;   % 2 days
 
 k = keys(final_arrival);
-final_v = k{7};     % choose an arbitrary final vdc to visualize results
+final_v = k{6};     % choose an arbitrary final vdc to visualize results
 final_v_loc = get_location(final_v,location);
 vehicles = final_arrival(final_v);
 path = vehicles{1,3};
 center_dealer = path{end};
 center_loc = get_location(center_dealer,location);
 
-horizon = 2;
-while vehicles{horizon,2} - vehicles{1,2} < look_ahead_time && horizon <= size(vehicles,1)
-    horizon = horizon + 1;
-end
+horizon = min(50,size(vehicles,1));
 for i = 1:horizon
     veh = vehicles(i,:);
     path = veh{3};
@@ -618,7 +621,7 @@ end
 toc
 
 %% Attribution
-% Name: Aya Hamoodi
-%       Guangzhao Yang
+% Name: Guangzhao Yang
 %       Sumaanyu Maheshwari
 %       Wesley Graham
+%       Aya Hamoodi
