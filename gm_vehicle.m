@@ -504,18 +504,16 @@ save('final_third_quarter_2015.mat','handled_vehicles','overflow_vehicles',...
 
 %% Calculate costs
 % Calculate late penalty cost (10 dollars per day)
-late_cost = 0;
 ks = keys(routing_map);
 lead_time = containers.Map('KeyType','char','ValueType','double');
 for i = 1:length(routing_map)
     info = routing_map(ks{i});
     duration = info{end,2} - info{1,2};
-    late_cost = late_cost + 10*floor(duration);
     lead_time(ks{i}) = duration;
 end
+late_cost = 10 * sum(cell2mat(values(lead_time)));
 
 % Calculate VDC cost
-fixed_cost_vdc = 0;
 annual_cost_vdc = 730/4;
 handling_cost_vdc = 50;
 overflow_shuttle_cost = 30;
