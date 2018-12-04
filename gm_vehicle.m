@@ -19,8 +19,8 @@ sorted_plant_arrival_time = sort(cell2mat(keys(arrival_time_map)));
 
 load processed_data.mat
 input_data = 'Input_Cost%2C+Location.xlsx';
-dataset_1 = 'DataSet1/VehicleShipmentRequirement_DataSet1';
-dataset_2 = 'DataSet2/VehicleShipmentRequirement_DataSet2';
+dataset_1 = 'DataSet1/VehicleShipmentRequirement_DataSet1.csv';
+dataset_2 = 'DataSet2/VehicleShipmentRequirement_DataSet2.csv';
 final_prob = 'final_problem/Problem_VehicleShipmentRequirement.csv';
 
 [~,~,location] = xlsread(input_data,1);
@@ -176,15 +176,58 @@ while ~isempty(timeline)
     for i = 1:size(arrive_table,1)
         curr_VDC = arrive_table{i,1};
         arriving_vehicles = arrive_table{i,2};
-        inflows = size(arriving_vehicles,1);
+        % check if any vehicles need to be added urgently
+        for j = 1:length(VDCs)
+            prev_VDC = VDCs{j};
+            if strcmp(prev_VDC,curr_VDC)
+                continue
+            end
+            edge = [prev_VDC,' ',curr_VDC];
+            if ~isKey(pending_vehicles,edge)
+                continue
+            end
+            idx1 = find(ismember(VDCs,prev_VDC),1);
+            idx2 = find(ismember(VDCs,curr_VDC),1);
+            mode = trans_modes(idx1, idx2);
+            if strcmp(mode,'T')
+                load_factor = 10;
+            elseif strcmp(mode,'R')
+                load_factor = 20;
+            end
+            if size(pending_vehicles(edge),1) < load_factor
+                continue
+            end
+            temp1 = curr_inventory(prev_VDC);
+            temp2 = curr_inventory(curr_VDC);
+            overflow1 = max(0,temp1{2}-get_capacity(prev_VDC,VDC_capacity));
+            overflow2 = max(0,temp2{2}-get_capacity(curr_VDC,VDC_capacity));
+            if overflow1 < overflow2
+                continue
+            end
+            wait_list = pending_vehicles(edge);
+            remain = mod(size(wait_list,1),load_factor);
+            num_shipped = size(wait_list,1) - remain;
+            new_vehicles = wait_list(1:num_shipped,:);
+            if remain > 0
+                pending_vehicles(edge) = wait_list(num_shipped+1:end,:);
+            else
+                remove(pending_vehicles,edge);
+            end
+            arriving_vehicles(end+1:end+num_shipped,:) = new_vehicles;
+            curr_inventory(prev_VDC) = {curr_time,temp1{2}-num_shipped};
+        end
+        
+        
         depart_table = cell(0,2);
+        final = 0;
         % classify vehicles by their next destinations
-        for j = 1:inflows
+        for j = 1:size(arriving_vehicles,1)
             arrive_veh = arriving_vehicles(j,:);
             path = arrive_veh{3};
             curr_idx = find(ismember(path(1:end-1),{curr_VDC}),1);
             % arrive to final VDC
             if strcmp(curr_VDC, path{end-1})
+                final = final + 1;
                 if ~isKey(final_arrival,curr_VDC)
                     final_arrival(curr_VDC) = arrive_veh;
                 else
@@ -208,6 +251,7 @@ while ~isempty(timeline)
         end
         
         % check if there exists a full load along some edges
+        inflows = size(arriving_vehicles,1) - final;
         outflows = 0;
         for j = 1:size(depart_table,1)
             next_VDC = depart_table{j,1};
@@ -243,6 +287,23 @@ while ~isempty(timeline)
                 pending_vehicles(edge) = wait_list;
                 continue
             end
+            
+            % check if next destination will be overflowed
+            if isKey(curr_inventory,curr_VDC) && isKey(curr_inventory,next_VDC)
+                outflow = wl_len - mod(wl_len,load_factor) * (edge_flows(edge) > 0);
+                temp1 = curr_inventory(curr_VDC);
+                temp2 = curr_inventory(next_VDC);
+                overflow1 = max(0,temp1{2}+inflows-get_capacity(curr_VDC,VDC_capacity));
+                overflow2 = max(0,temp2{2}+outflow-get_capacity(next_VDC,VDC_capacity));
+                if overflow1 < overflow2
+                    pending_vehicles(edge) = wait_list;
+                    if edge_flows(edge) == 0
+                        remove(edge_flows,edge);
+                    end
+                    continue
+                end
+            end
+            
             
             % full load
             if isKey(pending_vehicles,edge)
@@ -351,8 +412,9 @@ variable_cost = 4;
 
 look_ahead_time = 2;   % 2 days
 tic
-for i = 1:length(final_VDCs)
-    final_v = final_VDCs{i};
+ks = keys(final_arrival);
+for i = 1:length(ks)
+    final_v = ks{i};
     vehicles = final_arrival(final_v);
     count = 0;
     disp([num2str(i),' VDC: ',final_v]);
@@ -379,14 +441,14 @@ for i = 1:length(final_VDCs)
                 dealer_vehicle_map(d) = val;
             end
         end
-        route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
-        selected_dealers = cell2mat(keys(route_map));
+        delivery_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
+        selected_dealers = cell2mat(keys(delivery_map));
         [tour,total_dist] = three_opt(final_v,selected_dealers,location);
         
         % deliver vehicles
         shipped_vehicles = cell(0,size(vehicles,2));
         for j = 1:length(selected_dealers)
-            shipped_veh = route_map(selected_dealers(j));
+            shipped_veh = delivery_map(selected_dealers(j));
             shipped_vehicles(end+1:end+size(shipped_veh,1),:) = shipped_veh;
         end
         
@@ -438,7 +500,7 @@ end
 toc
 
 save('final_third_quarter_2015.mat','handled_vehicles','overflow_vehicles',...
-     'overflow_days','routing_map','logistics_cost');
+     'overflow_days','final_arrival','routing_map','logistics_cost');
 
 %% Calculate costs
 % Calculate late penalty cost (10 dollars per day)
@@ -454,7 +516,7 @@ end
 
 % Calculate VDC cost
 fixed_cost_vdc = 0;
-annual_cost_vdc = 730;
+annual_cost_vdc = 730/4;
 handling_cost_vdc = 50;
 overflow_shuttle_cost = 30;
 overflow_variable_cost = 4;
@@ -502,8 +564,8 @@ for i = 1:horizon
         dealer_vehicle_map(d) = val;
     end
 end
-route_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
-selected_dealers = cell2mat(keys(route_map));
+delivery_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
+selected_dealers = cell2mat(keys(delivery_map));
 [tour,total_dist] = three_opt(final_v,selected_dealers,location);
 
 figure();
