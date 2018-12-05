@@ -167,6 +167,7 @@ disp(['Processing time: ',num2str(round(toc,2)),' sec']);
 tic
 count = 0;
 logistics_cost = 0;
+% all_departures = final_departure_time(routing_map,timeline);
 while ~isempty(timeline)
     % get latest arrival time
     curr_time = timeline(1);
@@ -310,15 +311,15 @@ while ~isempty(timeline)
                 trans_cost = (dist*variable_cost+fixed_cost)*ceil(outflow/load_factor);
                 logistics_cost = logistics_cost + trans_cost;
             end
-
+            
+%             if isKey(all_departures,curr_time)
+%                 val = all_departures(curr_time);
+%                 if ismember(curr_VDC,val(:,1))
+%                     idx = find(ismember(val(:,1),curr_VDC),1);
+%                     outflows = outflows + val{idx,2};
+%                 end
+%             end
             % overflow information
-            if isKey(all_departures,curr_time)
-                val = all_departures(curr_time);
-                if ismember(curr_VDC,val(:,1))
-                    idx = find(ismember(val(:,1),curr_VDC),1);
-                    outflows = outflows + val{idx,2};
-                end
-            end
             netflows = inflows - outflows;
             if ~isKey(curr_inventory,curr_VDC)
                 prev_inventory = 0;
@@ -341,25 +342,25 @@ while ~isempty(timeline)
                 overflow_days(curr_VDC) = overflow_days(curr_VDC) + duration*prev_overflow;
             end
         end
-    else
-        if isKey(all_departures,curr_time)
-            val = all_departures(curr_time);
-            inflows = 0;
-            for j = 1:size(val,1)
-                curr_VDC = val{j,1};
-                outflows = val{j,2};
-                % overflow information
-                netflows = inflows - outflows;
-                if isKey(curr_inventory,curr_VDC)
-                    past = curr_inventory(curr_VDC);
-                    prev_inventory = past{2};
-                    curr_inventory(curr_VDC) = {curr_time, prev_inventory+netflows};
-                    prev_overflow = max(0, prev_inventory - get_capacity(curr_VDC,VDC_capacity));
-                    duration = floor(curr_time - past{1});
-                    overflow_days(curr_VDC) = overflow_days(curr_VDC) + duration*prev_overflow;
-                end
-            end
-        end
+%     else
+%         if isKey(all_departures,curr_time)
+%             val = all_departures(curr_time);
+%             inflows = 0;
+%             for j = 1:size(val,1)
+%                 curr_VDC = val{j,1};
+%                 outflows = val{j,2};
+%                 % overflow information
+%                 netflows = inflows - outflows;
+%                 if isKey(curr_inventory,curr_VDC)
+%                     past = curr_inventory(curr_VDC);
+%                     prev_inventory = past{2};
+%                     curr_inventory(curr_VDC) = {curr_time, prev_inventory+netflows};
+%                     prev_overflow = max(0, prev_inventory - get_capacity(curr_VDC,VDC_capacity));
+%                     duration = floor(curr_time - past{1});
+%                     overflow_days(curr_VDC) = overflow_days(curr_VDC) + duration*prev_overflow;
+%                 end
+%             end
+%         end
     end
     
     
