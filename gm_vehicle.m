@@ -95,6 +95,8 @@ for i = 1:numel(plants)
 end
 disp(['Processing time: ',num2str(round(toc,2)),' sec']);
 
+
+
 %% Initializing variables
 % 'vdc' --> double
 handled_vehicles = containers.Map('KeyType','char','ValueType','double');
@@ -377,6 +379,8 @@ toc
 % save('intermediate_third_quarter_2015.mat','handled_vehicles','overflow_vehicles',...
 %      'overflow_days','final_arrival','routing_map','logistics_cost');
 
+
+
 %% Last leg: distribute from final VDC to dealers
 speed = 30;
 load_factor = 10;
@@ -486,6 +490,8 @@ toc
 %      'overflow_days','final_arrival','routing_map','logistics_cost');
 
 %% Calculate costs
+load second_stage_data.mat
+
 % Calculate late penalty cost (10 dollars per day)
 ks = keys(routing_map);
 lead_time = containers.Map('KeyType','char','ValueType','double');
@@ -510,10 +516,54 @@ for i = 1:length(VDCs)
     vdc_cost = vdc_cost + cost;
 end
 
-% Total cost
+% Total cost in the third quarter of 2015
 total_cost = logistics_cost + late_cost + vdc_cost;
 
+%% Output tables
+from_time = '01-Jul-2015';
+to_time = '30-Sep-2015';
 
+network_design_details_table = cell(length(VDCs),11);
+for i = 1:length(VDCs)
+    vdc = VDCs{i};
+    loc = get_location(vdc,location);
+    lat = loc(1); long = loc(2);
+    cap = get_capacity(vdc,VDC_capacity);
+    vdc_vehicles = handled_vehicles(vdc);
+    overflow_v = overflow_vehicles(vdc);
+    overflow_d = overflow_days(vdc);
+    cost = cap*annual_cost_vdc + vdc_vehicles*handling_cost_vdc ...
+           + overflow_v*overflow_shuttle_cost + overflow_d*overflow_variable_cost;
+    network_design_details_table(i,:) = {vdc,lat,long,cap,0,vdc_vehicles,...
+                                         overflow_v,overflow_d,cost,from_time,to_time};
+end
+
+routing_details_table = cell(0,5);
+routing_keys = keys(routing_map);
+for i = 1:length(routing_keys)
+    detail = routing_map(routing_keys{i});
+    for j = 1:size(detail,1)
+        detail(j,2) = {datestr(detail{j,2})};
+        detail(j,3) = {datestr(detail{j,3})};
+    end
+    row = size(detail,1);
+    col = size(detail,2);
+    start = cellstr(repmat(routing_keys{i},row,1));
+    entry = cell(row, col+1);
+    entry(:,1) = start;
+    entry(:,2:end) = detail;
+    routing_details_table(end+1:end+row,:) = entry;
+end
+
+lead_time_table = cell(length(lead_time),2);
+lead_keys = keys(lead_time);
+for i = 1:length(lead_keys)
+    lead_time_table(i,:) = {lead_keys{i}, lead_time(lead_keys{i})};
+end
+
+%%
+save('results.mat','logistics_cost','late_cost','vdc_cost',...
+     'network_design_details_table','routing_details_table','lead_time_table');
 
 %% Visualization
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
