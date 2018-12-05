@@ -115,7 +115,7 @@ pending_vehicles = containers.Map('KeyType','char','ValueType','any');
 % 'vdc1 vdc2' --> double
 edge_flows = containers.Map('KeyType','char','ValueType','double');
 % 'vid' --> (loc, arrive_time, depart_time, depart_mode)
-routing_map = containers.Map('KeyType','char','ValueType','any');
+% routing_map = containers.Map('KeyType','char','ValueType','any');
 
 %% Choose a subset of the dataset
 % Third quarter of 2015
@@ -163,6 +163,39 @@ for i = 1:length(timeline)
 end
 disp(['Processing time: ',num2str(round(toc,2)),' sec']);
 
+%%
+all_departures = containers.Map('KeyType','double','ValueType','any');
+ks = keys(routing_map);
+tic
+for i = 1:length(routing_map)
+    info = routing_map(ks{i});
+    depart_time = info{end-1,3};
+    if ~ismember(depart_time,timeline)
+        idx = find(timeline < depart_time,1,'last');
+        if length(idx) == 1
+            timeline = [timeline(1:idx), depart_time, timeline(idx+1:end)];
+        else
+            timeline = [depart_time, timeline];
+        end
+    end
+    
+    depart_vdc = info{end-1,1};
+    if ~isKey(all_departures,depart_time)
+        all_departures(depart_time) = {depart_vdc,1};
+    else
+        val = all_departures(depart_time);
+        if ~ismember(depart_vdc,val(:,1))
+            val(end+1,:) = {depart_vdc,1};
+            all_departures(depart_time) = val;
+        else
+            idx = find(ismember(val(:,1),depart_vdc),1);
+            val(idx,2) = {val{idx,2} + 1};
+            all_departures(depart_time) = val;
+        end
+    end
+end
+toc
+
 %% Find final VDC arrival time for each vehicle
 tic
 count = 0;
@@ -171,225 +204,197 @@ while ~isempty(timeline)
     % get latest arrival time
     curr_time = timeline(1);
     timeline(1) = [];
-    arrive_table = all_arrivals(curr_time);
-    remove(all_arrivals, curr_time);
-    for i = 1:size(arrive_table,1)
-        curr_VDC = arrive_table{i,1};
-        arriving_vehicles = arrive_table{i,2};
-        % check if any vehicles need to be added urgently
-        for j = 1:length(VDCs)
-            prev_VDC = VDCs{j};
-            if strcmp(prev_VDC,curr_VDC)
-                continue
-            end
-            edge = [prev_VDC,' ',curr_VDC];
-            if ~isKey(pending_vehicles,edge)
-                continue
-            end
-            idx1 = find(ismember(VDCs,prev_VDC),1);
-            idx2 = find(ismember(VDCs,curr_VDC),1);
-            mode = trans_modes(idx1, idx2);
-            if strcmp(mode,'T')
-                load_factor = 10;
-            elseif strcmp(mode,'R')
-                load_factor = 20;
-            end
-            if size(pending_vehicles(edge),1) < load_factor
-                continue
-            end
-            temp1 = curr_inventory(prev_VDC);
-            temp2 = curr_inventory(curr_VDC);
-            overflow1 = max(0,temp1{2}-get_capacity(prev_VDC,VDC_capacity));
-            overflow2 = max(0,temp2{2}-get_capacity(curr_VDC,VDC_capacity));
-            if overflow1 < overflow2
-                continue
-            end
-            wait_list = pending_vehicles(edge);
-            remain = mod(size(wait_list,1),load_factor);
-            num_shipped = size(wait_list,1) - remain;
-            new_vehicles = wait_list(1:num_shipped,:);
-            if remain > 0
-                pending_vehicles(edge) = wait_list(num_shipped+1:end,:);
-            else
-                remove(pending_vehicles,edge);
-            end
-            arriving_vehicles(end+1:end+num_shipped,:) = new_vehicles;
-            curr_inventory(prev_VDC) = {curr_time,temp1{2}-num_shipped};
-        end
-        
-        
-        depart_table = cell(0,2);
-        final = 0;
-        % classify vehicles by their next destinations
-        for j = 1:size(arriving_vehicles,1)
-            arrive_veh = arriving_vehicles(j,:);
-            path = arrive_veh{3};
-            curr_idx = find(ismember(path(1:end-1),{curr_VDC}),1);
-            % arrive to final VDC
-            if strcmp(curr_VDC, path{end-1})
-                final = final + 1;
-                if ~isKey(final_arrival,curr_VDC)
-                    final_arrival(curr_VDC) = arrive_veh;
-                else
-                    val = final_arrival(curr_VDC);
-                    val(end+1,:) = arrive_veh;
-                    final_arrival(curr_VDC) = val;
-                end
-                continue
-            end
-            % not final VDC
-            next_VDC = path{curr_idx+1};
-            next_destinations = depart_table(:,1);
-            if ~ismember(next_VDC,next_destinations)
-                depart_table(end+1,:) = {next_VDC, arrive_veh};
-            else
-                idx = find(ismember(next_destinations,{next_VDC}),1);
-                val = depart_table{idx,2};
-                val(end+1,:) = arrive_veh;
-                depart_table(idx,2) = {val};
-            end
-        end
-        
-        % check if there exists a full load along some edges
-        inflows = size(arriving_vehicles,1) - final;
-        outflows = 0;
-        for j = 1:size(depart_table,1)
-            next_VDC = depart_table{j,1};
-            departing_vehicles = depart_table{j,2};
-            % determine transportation mode
-            idx1 = find(ismember(VDCs,curr_VDC),1);
-            idx2 = find(ismember(VDCs,next_VDC),1);
-            mode = trans_modes(idx1, idx2);
-            if strcmp(mode,'T')
-                speed = 30;
-                load_factor = 10;
-                fixed_cost = 200;
-                variable_cost = 4;
-            elseif strcmp(mode,'R')
-                speed = 10;
-                load_factor = 20;
-                fixed_cost = 2000;
-                variable_cost = 3;
-            end
-            
-            edge = [curr_VDC,' ',next_VDC];
-            if ~isKey(pending_vehicles,edge)
-                wait_list = departing_vehicles;
-            else
-                wait_list = pending_vehicles(edge);
-                wait_list(end+1:end+size(departing_vehicles,1),:) = departing_vehicles;
-            end
-            wl_len = size(wait_list,1);
-            edge_flows(edge) = edge_flows(edge) - size(departing_vehicles,1);
-            full_load = (wl_len >= load_factor || edge_flows(edge) == 0);
-            % not a full load
-            if ~full_load
-                pending_vehicles(edge) = wait_list;
-                continue
-            end
-            
-            % check if next destination will be overflowed
-            if isKey(curr_inventory,curr_VDC) && isKey(curr_inventory,next_VDC)
-                outflow = wl_len - mod(wl_len,load_factor) * (edge_flows(edge) > 0);
-                temp1 = curr_inventory(curr_VDC);
-                temp2 = curr_inventory(next_VDC);
-                overflow1 = max(0,temp1{2}+inflows-get_capacity(curr_VDC,VDC_capacity));
-                overflow2 = max(0,temp2{2}+outflow-get_capacity(next_VDC,VDC_capacity));
-                if overflow1 < overflow2
-                    pending_vehicles(edge) = wait_list;
-                    if edge_flows(edge) == 0
-                        remove(edge_flows,edge);
+    
+    if isKey(all_arrivals,curr_time)
+        arrive_table = all_arrivals(curr_time);
+        remove(all_arrivals, curr_time);
+        for i = 1:size(arrive_table,1)
+            curr_VDC = arrive_table{i,1};
+            arriving_vehicles = arrive_table{i,2};
+            depart_table = cell(0,2);
+            final = 0;
+            % classify vehicles by their next destinations
+            for j = 1:size(arriving_vehicles,1)
+                arrive_veh = arriving_vehicles(j,:);
+                path = arrive_veh{3};
+                curr_idx = find(ismember(path(1:end-1),{curr_VDC}),1);
+                % arrive to final VDC
+                if strcmp(curr_VDC, path{end-1})
+                    final = final + 1;
+                    if ~isKey(final_arrival,curr_VDC)
+                        final_arrival(curr_VDC) = arrive_veh;
+                    else
+                        val = final_arrival(curr_VDC);
+                        val(end+1,:) = arrive_veh;
+                        final_arrival(curr_VDC) = val;
                     end
                     continue
                 end
-            end
-            
-            
-            % full load
-            if isKey(pending_vehicles,edge)
-                remove(pending_vehicles,edge);
-            end
-            if edge_flows(edge) == 0
-                remove(edge_flows,edge);
-                outflow = wl_len;
-                departing_vehicles = wait_list;
-            else
-                remain = mod(wl_len,load_factor);
-                outflow = wl_len - remain;
-                departing_vehicles = wait_list(1:outflow,:);
-                if remain > 0
-                    pending_vehicles(edge) = wait_list(outflow+1:end,:);
-                end
-            end
-            outflows = outflows + outflow;
-            
-            % send departing vehicles to the next destination
-            curr_loc = get_location(curr_VDC,location);
-            next_loc = get_location(next_VDC,location);
-            dist = road_dist(curr_loc,next_loc);
-            next_time = curr_time + (dist/speed)/24;
-            
-            % VIN level routing details
-            for k = 1:outflow
-                depart_veh = departing_vehicles(k,:);
-                vid = depart_veh{1};
-                details = {curr_VDC, depart_veh{2}, curr_time, mode};
-                if ~isKey(routing_map,vid)
-                    routing_map(vid) = details;
+                % not final VDC
+                next_VDC = path{curr_idx+1};
+                next_destinations = depart_table(:,1);
+                if ~ismember(next_VDC,next_destinations)
+                    depart_table(end+1,:) = {next_VDC, arrive_veh};
                 else
-                    val = routing_map(vid);
-                    val(end+1,:) = details;
-                    routing_map(vid) = val;
+                    idx = find(ismember(next_destinations,{next_VDC}),1);
+                    val = depart_table{idx,2};
+                    val(end+1,:) = arrive_veh;
+                    depart_table(idx,2) = {val};
                 end
             end
-            
-            departing_vehicles(:,2) = num2cell(repmat(next_time,outflow,1));
-            departing_vehicles(:,4) = cellstr(repmat(next_VDC,outflow,1));
-            if ~isKey(all_arrivals, next_time)
-                all_arrivals(next_time) = {next_VDC,departing_vehicles};
-            else
-                val = all_arrivals(next_time);
-                val(end+1,:) = {next_VDC,departing_vehicles};
-                all_arrivals(next_time) = val;
-            end
-            
-            % add new arrival time to timeline
-            if ~ismember(next_time,timeline)
-                idx = find(timeline < next_time,1,'last');
-                if length(idx) == 1
-                    timeline = [timeline(1:idx), next_time, timeline(idx+1:end)];
+
+            % check if there exists a full load along some edges
+            inflows = size(arriving_vehicles,1);
+            outflows = 0;
+            for j = 1:size(depart_table,1)
+                next_VDC = depart_table{j,1};
+                departing_vehicles = depart_table{j,2};
+                % determine transportation mode
+                idx1 = find(ismember(VDCs,curr_VDC),1);
+                idx2 = find(ismember(VDCs,next_VDC),1);
+                mode = trans_modes(idx1, idx2);
+                if strcmp(mode,'T')
+                    speed = 30;
+                    load_factor = 10;
+                    fixed_cost = 200;
+                    variable_cost = 4;
+                elseif strcmp(mode,'R')
+                    speed = 10;
+                    load_factor = 20;
+                    fixed_cost = 2000;
+                    variable_cost = 3;
+                end
+
+                edge = [curr_VDC,' ',next_VDC];
+                if ~isKey(pending_vehicles,edge)
+                    wait_list = departing_vehicles;
                 else
-                    timeline = [next_time, timeline];
+                    wait_list = pending_vehicles(edge);
+                    wait_list(end+1:end+size(departing_vehicles,1),:) = departing_vehicles;
+                end
+                wl_len = size(wait_list,1);
+                edge_flows(edge) = edge_flows(edge) - size(departing_vehicles,1);
+                full_load = (wl_len >= load_factor || edge_flows(edge) == 0);
+                % not a full load
+                if ~full_load
+                    pending_vehicles(edge) = wait_list;
+                    continue
+                end
+                
+                % full load
+                if isKey(pending_vehicles,edge)
+                    remove(pending_vehicles,edge);
+                end
+                if edge_flows(edge) == 0
+                    remove(edge_flows,edge);
+                    outflow = wl_len;
+                    departing_vehicles = wait_list;
+                else
+                    remain = mod(wl_len,load_factor);
+                    outflow = wl_len - remain;
+                    departing_vehicles = wait_list(1:outflow,:);
+                    if remain > 0
+                        pending_vehicles(edge) = wait_list(outflow+1:end,:);
+                    end
+                end
+                outflows = outflows + outflow;
+
+                % send departing vehicles to the next destination
+                curr_loc = get_location(curr_VDC,location);
+                next_loc = get_location(next_VDC,location);
+                dist = road_dist(curr_loc,next_loc);
+                next_time = curr_time + (dist/speed)/24;
+
+                % VIN level routing details
+                for k = 1:outflow
+                    depart_veh = departing_vehicles(k,:);
+                    vid = depart_veh{1};
+                    details = {curr_VDC, depart_veh{2}, curr_time, mode};
+                    if ~isKey(routing_map,vid)
+                        routing_map(vid) = details;
+                    else
+                        val = routing_map(vid);
+                        val(end+1,:) = details;
+                        routing_map(vid) = val;
+                    end
+                end
+
+                departing_vehicles(:,2) = num2cell(repmat(next_time,outflow,1));
+                departing_vehicles(:,4) = cellstr(repmat(next_VDC,outflow,1));
+                if ~isKey(all_arrivals, next_time)
+                    all_arrivals(next_time) = {next_VDC,departing_vehicles};
+                else
+                    val = all_arrivals(next_time);
+                    val(end+1,:) = {next_VDC,departing_vehicles};
+                    all_arrivals(next_time) = val;
+                end
+
+                % add new arrival time to timeline
+                if ~ismember(next_time,timeline)
+                    idx = find(timeline < next_time,1,'last');
+                    if length(idx) == 1
+                        timeline = [timeline(1:idx), next_time, timeline(idx+1:end)];
+                    else
+                        timeline = [next_time, timeline];
+                    end
+                end
+
+                % calculate the transportation cost
+                trans_cost = (dist*variable_cost+fixed_cost)*ceil(outflow/load_factor);
+                logistics_cost = logistics_cost + trans_cost;
+            end
+
+            % overflow information
+            if isKey(all_departures,curr_time)
+                val = all_departures(curr_time);
+                if ismember(curr_VDC,val(:,1))
+                    idx = find(ismember(val(:,1),curr_VDC),1);
+                    outflows = outflows + val{idx,2};
                 end
             end
-            
-            % calculate the transportation cost
-            trans_cost = (dist*variable_cost+fixed_cost)*ceil(outflow/load_factor);
-            logistics_cost = logistics_cost + trans_cost;
+            netflows = inflows - outflows;
+            if ~isKey(curr_inventory,curr_VDC)
+                prev_inventory = 0;
+            else
+                past = curr_inventory(curr_VDC);
+                prev_inventory = past{2};
+            end
+            prev_overflow = max(0, prev_inventory - get_capacity(curr_VDC,VDC_capacity));
+            curr_overflow = max(0, prev_inventory + netflows - get_capacity(curr_VDC,VDC_capacity));
+            curr_inventory(curr_VDC) = {curr_time, prev_inventory+netflows};
+            if curr_overflow > 0
+                if prev_overflow > 0
+                    curr_overflow = max(0,curr_overflow-prev_overflow);
+                end
+                overflow_vehicles(curr_VDC) = overflow_vehicles(curr_VDC) + curr_overflow;
+            end
+            if prev_overflow > 0
+                prev_time = past{1};
+                duration = floor(curr_time-prev_time);
+                overflow_days(curr_VDC) = overflow_days(curr_VDC) + duration*prev_overflow;
+            end
         end
-        
-        % overflow information
-        netflows = inflows - outflows;
-        if ~isKey(curr_inventory,curr_VDC)
-            prev_inventory = 0;
-        else
-            past = curr_inventory(curr_VDC);
-            prev_inventory = past{2};
-        end
-        prev_overflow = prev_inventory - get_capacity(curr_VDC,VDC_capacity);
-        curr_overflow = prev_inventory + netflows - get_capacity(curr_VDC,VDC_capacity);
-        if ~isKey(overflow_vehicles,curr_VDC)
-            overflow_vehicles(curr_VDC) = max(0,curr_overflow);
-        else
-            overflow_vehicles(curr_VDC) = overflow_vehicles(curr_VDC) + max(0,curr_overflow);
-        end
-        curr_inventory(curr_VDC) = {curr_time, prev_inventory+netflows};
-        if prev_overflow > 0
-            prev_time = past{1};
-            duration = floor(curr_time-prev_time);
-            overflow_days(curr_VDC) = overflow_days(curr_VDC) + duration*prev_overflow;
+    else
+        if isKey(all_departures,curr_time)
+            val = all_departures(curr_time);
+            inflows = 0;
+            for j = 1:size(val,1)
+                curr_VDC = val{j,1};
+                outflows = val{j,2};
+                % overflow information
+                netflows = inflows - outflows;
+                if isKey(curr_inventory,curr_VDC)
+                    past = curr_inventory(curr_VDC);
+                    prev_inventory = past{2};
+                    curr_inventory(curr_VDC) = {curr_time, prev_inventory+netflows};
+                    prev_overflow = max(0, prev_inventory - get_capacity(curr_VDC,VDC_capacity));
+                    duration = floor(curr_time - past{1});
+                    overflow_days(curr_VDC) = overflow_days(curr_VDC) + duration*prev_overflow;
+                end
+            end
         end
     end
+    
     
     count = count + 1;
     if mod(count,5e3) == 0
@@ -479,7 +484,7 @@ for i = 1:length(ks)
             details = {d, delivered_time(d), delivered_time(d), 'T'};
             if ~isKey(routing_map,vid)
                 % plant is the final vdc for these vehicles
-                val = {d, arrive_time, depart_time, 'T'};
+                val = {final_v, arrive_time, depart_time, 'T'};
                 val(end+1,:) = details;
                 routing_map(vid) = val;
             else
@@ -540,20 +545,6 @@ end
 % Total cost
 total_cost = logistics_cost + late_cost + vdc_cost;
 
-%%
-ks = keys(lead_time);
-temp = containers.Map('KeyType','double','ValueType','double');
-for i = 1:length(ks)
-    vid = ks{i};
-    if lead_time(vid) <= 0
-        detail = routing_map(vid);
-        if ~isKey(temp,size(detail,1))
-            temp(size(detail,1)) = 1;
-        else
-            temp(size(detail,1)) = temp(size(detail,1)) + 1;
-        end
-    end
-end
 
 
 %% Visualization
