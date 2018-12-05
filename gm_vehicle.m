@@ -1,7 +1,12 @@
 %% IEOR 162, Project
 
 %% Preparation
-% Put Problem_VehicleShipmentRequirement.csv in ./final_problem/ directory
+% 0. Read README.md
+% 1. Run this block of code
+% 2. Put Problem_VehicleShipmentRequirement.csv in ./final_problem/ directory
+% 3. Download: https://drive.google.com/file/d/1-3BCiZ6_6lCfSrmXhkpW25MomB5wfkAa/view?usp=sharing
+% 4. Put arrival_time_map.mat in home directory
+
 homedir = pwd;
 new_dir = sprintf('%s/final_problem', homedir);
 if ~exist(new_dir, 'dir')
@@ -376,7 +381,7 @@ while ~isempty(timeline)
 end
 toc
 
-% save('intermediate_third_quarter_2015.mat','handled_vehicles','overflow_vehicles',...
+% save('first_stage_data.mat','handled_vehicles','overflow_vehicles',...
 %      'overflow_days','final_arrival','routing_map','logistics_cost');
 
 
@@ -486,7 +491,7 @@ for i = 1:length(ks)
 end
 toc
 
-% save('final_third_quarter_2015.mat','handled_vehicles','overflow_vehicles',...
+% save('second_stage_data.mat','handled_vehicles','overflow_vehicles',...
 %      'overflow_days','final_arrival','routing_map','logistics_cost');
 
 %% Calculate costs
@@ -519,7 +524,9 @@ end
 % Total cost in the third quarter of 2015
 total_cost = logistics_cost + late_cost + vdc_cost;
 
-%% Output tables
+
+
+%% Create tables
 from_time = '01-Jul-2015';
 to_time = '30-Sep-2015';
 
@@ -587,65 +594,12 @@ output3(2:end,:) = lead_time_table;
 T = cell2table(output3);
 writetable(T,'lead_time_table.csv');
 
+
+
 %% Visualization
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%                  Below are codes for visualization                  %%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Visualize a milkrun tour
-dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
-look_ahead_time = 2;   % 2 days
-
-k = keys(final_arrival);
-final_v = k{6};     % choose an arbitrary final vdc to visualize results
-final_v_loc = get_location(final_v,location);
-vehicles = final_arrival(final_v);
-path = vehicles{1,3};
-center_dealer = path{end};
-center_loc = get_location(center_dealer,location);
-
-horizon = min(50,size(vehicles,1));
-for i = 1:horizon
-    veh = vehicles(i,:);
-    path = veh{3};
-    d = path{end};
-    if ~isKey(dealer_vehicle_map,d)
-        dealer_vehicle_map(d) = veh;
-    else
-        val = dealer_vehicle_map(d);
-        val(end+1,:) = veh;
-        dealer_vehicle_map(d) = val;
-    end
-end
-delivery_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
-selected_dealers = cell2mat(keys(delivery_map));
-[tour,total_dist] = three_opt(final_v,selected_dealers,location);
-
-figure();
-hold on;
-grid on;
-lats = zeros(1,length(tour));
-longs = zeros(1,length(tour));
-for i = 1:length(tour)
-    loc = get_location(tour{i},location);
-    lats(i) = loc(1);
-    longs(i) = loc(2);
-end
-p1 = plot(mod(longs+360,360)-180,lats,'-r*');
-
-deals = cell2mat(keys(dealer_vehicle_map));
-lats = zeros(1,length(deals));
-longs = zeros(1,length(deals));
-for i = 1:length(deals)
-    loc = get_location(deals(i),location);
-    lats(i) = loc(1);
-    longs(i) = loc(2);
-end
-p2 = plot(mod(longs+360,360)-180,lats,'bd','MarkerSize',8);
-p3 = plot(mod(center_loc(2)+360,360)-180,center_loc(1),'ks','MarkerSize',15);
-p4 = plot(mod(final_v_loc(2)+360,360)-180,final_v_loc(1),'ko','MarkerSize',10);
-legend([p1,p2,p3,p4],{'selected','dealers','center dealer','final VDC'});
-axis equal;
 
 %% Visualize distribution of car production
 first_date = floor(min(plant_arrival_time));
@@ -734,6 +688,61 @@ for i = 1:numel(plants)
     legend('dealer','VDC');
 end
 toc
+
+%% Visualize a milkrun tour
+dealer_vehicle_map = containers.Map('KeyType','double','ValueType','any');
+look_ahead_time = 2;   % 2 days
+
+k = keys(final_arrival);
+final_v = k{6};     % choose an arbitrary final vdc to visualize results
+final_v_loc = get_location(final_v,location);
+vehicles = final_arrival(final_v);
+path = vehicles{1,3};
+center_dealer = path{end};
+center_loc = get_location(center_dealer,location);
+
+horizon = min(50,size(vehicles,1));
+for i = 1:horizon
+    veh = vehicles(i,:);
+    path = veh{3};
+    d = path{end};
+    if ~isKey(dealer_vehicle_map,d)
+        dealer_vehicle_map(d) = veh;
+    else
+        val = dealer_vehicle_map(d);
+        val(end+1,:) = veh;
+        dealer_vehicle_map(d) = val;
+    end
+end
+delivery_map = forward_sweep(final_v,center_dealer,dealer_vehicle_map,location);
+selected_dealers = cell2mat(keys(delivery_map));
+[tour,total_dist] = three_opt(final_v,selected_dealers,location);
+
+figure();
+hold on;
+grid on;
+lats = zeros(1,length(tour));
+longs = zeros(1,length(tour));
+for i = 1:length(tour)
+    loc = get_location(tour{i},location);
+    lats(i) = loc(1);
+    longs(i) = loc(2);
+end
+p1 = plot(mod(longs+360,360)-180,lats,'-r*');
+
+deals = cell2mat(keys(dealer_vehicle_map));
+lats = zeros(1,length(deals));
+longs = zeros(1,length(deals));
+for i = 1:length(deals)
+    loc = get_location(deals(i),location);
+    lats(i) = loc(1);
+    longs(i) = loc(2);
+end
+p2 = plot(mod(longs+360,360)-180,lats,'bd','MarkerSize',8);
+p3 = plot(mod(center_loc(2)+360,360)-180,center_loc(1),'ks','MarkerSize',15);
+p4 = plot(mod(final_v_loc(2)+360,360)-180,final_v_loc(1),'ko','MarkerSize',10);
+legend([p1,p2,p3,p4],{'selected','dealers','center dealer','final VDC'});
+axis equal;
 
 %% Attribution
 % Name: Guangzhao Yang
