@@ -561,9 +561,31 @@ for i = 1:length(lead_keys)
     lead_time_table(i,:) = {lead_keys{i}, lead_time(lead_keys{i})};
 end
 
-%%
-save('results.mat','logistics_cost','late_cost','vdc_cost',...
-     'network_design_details_table','routing_details_table','lead_time_table');
+% save('results.mat','logistics_cost','late_cost','vdc_cost',...
+%      'network_design_details_table','routing_details_table','lead_time_table');
+
+%% Export to csv files
+header1 = {'VDC','Lat','Long','Capacity (veh)','VDC Opening Cost ($)','VDC Vehicles', ...
+           'Overflow Vehicles','Overflow Vehicles * Days','Total Cost ($)','From Time','To Time'};
+output1 = cell(size(network_design_details_table,1)+1,size(network_design_details_table,2));
+output1(1,:) = header1;
+output1(2:end,:) = network_design_details_table;
+T = cell2table(output1);
+writetable(T,'network_design_details_table.csv');
+
+header2 = {'VIN', 'LOC', 'Arrive Time', 'Depart Time', 'Depart Mode'};
+output2 = cell(size(routing_details_table,1)+1,size(routing_details_table,2));
+output2(1,:) = header2;
+output2(2:end,:) = routing_details_table;
+T = cell2table(output2);
+writetable(T,'routing_details_table.csv');
+
+header3 = {'VIN', 'Lead Time (Day)'};
+output3 = cell(size(lead_time_table,1)+1,size(lead_time_table,2));
+output3(1,:) = header3;
+output3(2:end,:) = lead_time_table;
+T = cell2table(output3);
+writetable(T,'lead_time_table.csv');
 
 %% Visualization
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
